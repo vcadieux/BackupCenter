@@ -1,5 +1,5 @@
 FROM python:3.13-alpine
-RUN apk add --no-cache openssh-client age tar && addgroup -g 10001 backup && adduser -D -u 10001 -G backup backup
+RUN apk add --no-cache openssh-client age tar tzdata && addgroup -g 10001 backup && adduser -D -u 10001 -G backup backup
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

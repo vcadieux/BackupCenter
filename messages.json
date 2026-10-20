@@ -340,5 +340,8 @@
   "Arborescence /home inaccessible ou absente.": "The /home directory is inaccessible or missing.",
   "Vhosts NGINX inaccessibles; détection limitée aux dossiers.": "NGINX virtual hosts are inaccessible; discovery is limited to directories.",
   "dossiers CloudPanel": "CloudPanel folders",
-  "vhost NGINX": "NGINX virtual host"
+  "vhost NGINX": "NGINX virtual host",
+  "Heure de sauvegarde": "Backup time",
+  "Fuseau horaire : ": "Time zone: ",
+  "Heure de sauvegarde invalide (HH:MM).": "Invalid backup time (HH:MM)."
 }

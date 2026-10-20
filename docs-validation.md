@@ -12,7 +12,7 @@ docker run --rm --network none --read-only \
   backupcenter:test python -m unittest discover -s /tests -v
 ```
 
-Tests use temporary data and fixture credentials. They cover authentication, CSRF, rate limits, secret redaction, generated SSH keys and cleanup, configuration versions, site discovery/import, archive encryption, isolated extraction, pagination, and English API messages. They do not prove production recoverability.
+Tests use temporary data and fixture credentials. They cover authentication, CSRF, rate limits, secret redaction, generated SSH keys and cleanup, configuration versions, site discovery/import, archive encryption, isolated extraction, pagination, English API messages, schedule migration, time validation, calendar recurrence and DST transitions. They do not prove production recoverability.
 
 ## Frontend
 

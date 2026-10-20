@@ -70,13 +70,17 @@ Restoration currently transfers and extracts into a **new isolated folder on the
 
 A full VPS backup covers accessible files on the root filesystem and all logical databases. It excludes virtual filesystems, `/mnt`, `/media`, raw MySQL files, Docker data, and swap. Separate mounted volumes need additional sources. It is **not a bootable disk image** or an OVHcloud snapshot.
 
-Copies are full archives, not incremental. Provision sufficient temporary space for the compressed files, ZIP, and decrypted verification copy. Schedules are hour intervals; “every 30 days” means 720 hours. External notifications and provider snapshot automation are not implemented.
+Copies are full archives, not incremental. Provision sufficient temporary space for the compressed files, ZIP, and decrypted verification copy. External notifications and provider snapshot automation are not implemented.
 
 ## Development and repository hygiene
 
 See [testing](docs-validation.md). Runtime data, keys, `.env`, personal deployment notes, and screenshots belong in ignored local/private directories. Do not add them with `git add -f`. `.env.example` contains only generic values. No GitHub repository is created or published by this project setup.
 
 This application can hold administrator SSH and database credentials. Review the code and deployment permissions before using it for critical systems. A verified archive is not a substitute for a restoration drill.
+
+## Backup schedule
+
+Backup time defaults to **02:00** in the configured `TZ` time zone and can be changed for each source or during site discovery. Daily, weekly and 30-day schedules preserve local time across daylight saving changes. A nonexistent spring time shifts forward by the clock gap; a repeated fall time runs once. Existing sources migrate to 02:00. Subdaily schedules repeat from the selected time.
 
 ## Support the project
 

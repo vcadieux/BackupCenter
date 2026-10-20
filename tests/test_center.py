@@ -25,6 +25,53 @@ class CenterTests(unittest.TestCase):
         return r.json['id']
     def site(self,server):
         return self.post('sites',{'server_id':server,'name':'fixture.example','path':'/srv/fixture','scope':'site','databases':[],'files_only':True,'retention':2,'interval_hours':24,'enabled':False})
+    def test_schedule_calendar_and_dst(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        zone=ZoneInfo('America/Toronto')
+        stamp=lambda value:int(datetime.fromisoformat(value).replace(tzinfo=zone).timestamp())
+        local=lambda value:datetime.fromtimestamp(value,zone).isoformat()
+        with patch.dict(os.environ,TZ='America/Toronto'):
+            self.assertEqual(local(E.next_schedule(24,after=stamp('2026-10-20T01:00'))),'2026-10-20T02:00:00-04:00')
+            self.assertEqual(local(E.next_schedule(24,after=stamp('2026-10-20T02:00'))),'2026-10-21T02:00:00-04:00')
+            self.assertEqual(local(E.next_schedule(168,'04:30',after=stamp('2026-10-20T05:00'),previous=stamp('2026-10-20T04:30'))),'2026-10-27T04:30:00-04:00')
+            self.assertEqual(local(E.next_schedule(720,after=stamp('2026-10-20T03:00'),previous=stamp('2026-10-20T02:00'))),'2026-11-19T02:00:00-05:00')
+            self.assertEqual(local(E.next_schedule(24,after=stamp('2026-03-08T00:00'))),'2026-03-08T03:00:00-04:00')
+            self.assertEqual(local(E.next_schedule(24,'01:30',after=stamp('2026-11-01T01:30'))),'2026-11-02T01:30:00-05:00')
+            self.assertEqual(local(E.next_schedule(6,'20:00',after=stamp('2026-10-20T01:00'))),'2026-10-20T02:00:00-04:00')
+            self.assertEqual(local(E.next_schedule(168,after=stamp('2026-11-10T12:00'),previous=stamp('2026-10-20T02:00'))),'2026-11-17T02:00:00-05:00')
+        for clock in ['24:00','2:00','12:60','bad',None]:
+            with self.assertRaises(ValueError):E.next_schedule(24,clock)
+
+    def test_schedule_migration_preserves_sources_and_is_idempotent(self):
+        self.setup_admin();server=self.server();self.site(server)
+        with E.db() as c:
+            original=dict(c.execute('SELECT * FROM sites').fetchone())
+            c.execute('ALTER TABLE sites DROP COLUMN backup_time')
+        E.init()
+        with E.db() as c:migrated=dict(c.execute('SELECT * FROM sites').fetchone())
+        for key in ['id','server_id','db_config','databases','enabled','retention']:
+            self.assertEqual(original[key],migrated[key])
+        self.assertEqual(migrated['backup_time'],'02:00')
+        self.assertEqual(migrated['version'],original['version']+1)
+        self.assertEqual(__import__('datetime').datetime.fromtimestamp(migrated['next_run'],E.schedule_zone()).strftime('%H:%M'),'02:00')
+        E.init()
+        with E.db() as c:self.assertEqual(migrated,dict(c.execute('SELECT * FROM sites').fetchone()))
+
+    def test_schedule_api_and_preserve_due_time(self):
+        self.setup_admin();server=self.server();response=self.site(server)
+        self.assertEqual(response.status_code,200,response.json)
+        site=self.client.get('/api/state').json['sites'][0]
+        self.assertEqual(site['backup_time'],'02:00')
+        payload=dict(site,files_only=True,backup_time='04:35')
+        self.assertEqual(self.post('sites/'+site['id'],payload).status_code,200)
+        updated=self.client.get('/api/state').json['sites'][0]
+        self.assertEqual(updated['backup_time'],'04:35')
+        with patch.object(E,'now',return_value=E.now()+3600):
+            self.assertEqual(self.post('sites/'+site['id'],dict(updated,files_only=True,name='Renamed')).status_code,200)
+        self.assertEqual(self.client.get('/api/state').json['sites'][0]['next_run'],updated['next_run'])
+        self.assertEqual(self.post('sites',dict(payload,backup_time='25:00')).status_code,400)
+
     def test_auth_csrf_setup_and_secret_redaction(self):
         self.assertEqual(self.client.post('/api/setup',json={}).status_code,403)
         self.assertEqual(self.post('servers',{}).status_code,401)

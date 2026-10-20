@@ -1,6 +1,7 @@
 import os, json, sqlite3, secrets, subprocess, tempfile, shutil, hashlib, zipfile, time, threading, shlex
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from cryptography.fernet import Fernet
 
 DATA=Path(os.environ.get('BC_DATA','/data'))
@@ -8,6 +9,28 @@ ARCHIVES=Path(os.environ.get('BC_ARCHIVES','/archives'))
 REMOTE=Path(__file__).with_name('remote.py').read_text()
 
 def now(): return int(time.time())
+def schedule_zone(): return ZoneInfo(os.environ.get('TZ','UTC'))
+
+def next_schedule(hours, clock='02:00', after=None, previous=None):
+    """Calendar days keep local time across DST; subdaily slots repeat from clock."""
+    import re
+    if not isinstance(clock,str) or not re.fullmatch(r'(?:[01][0-9]|2[0-3]):[0-5][0-9]',clock):
+        raise ValueError('Heure de sauvegarde invalide (HH:MM).')
+    zone=schedule_zone(); after=now() if after is None else after
+    local=datetime.fromtimestamp(after,zone); hour,minute=map(int,clock.split(':'))
+    day=local.date()
+    if hours>=24 and hours%24==0 and previous is not None:
+        origin=datetime.fromtimestamp(previous,zone).date(); days=hours//24
+        day=origin+timedelta(days=max(1,(day-origin).days//days)*days)
+    while True:
+        base=datetime(day.year,day.month,day.day,hour,minute,tzinfo=zone)
+        # Nonexistent spring times shift forward by the DST gap; fall uses first occurrence.
+        slots=[base+timedelta(hours=h) for h in range(-24,48,hours)] if hours<24 else [base]
+        for slot in sorted(slots,key=lambda x:x.timestamp()):
+            stamp=int(slot.timestamp())
+            if stamp>after: return stamp
+        day+=timedelta(days=hours//24 if previous is not None and hours>=24 and hours%24==0 else 1)
+
 class Connection(sqlite3.Connection):
     def __exit__(self,*args):
         try: return super().__exit__(*args)
@@ -42,6 +65,11 @@ def init():
         columns={r['name'] for r in c.execute('PRAGMA table_info(servers)')}
         if 'db_config' not in columns: c.execute("ALTER TABLE servers ADD COLUMN db_config TEXT NOT NULL DEFAULT ''")
         if 'version' not in columns: c.execute('ALTER TABLE servers ADD COLUMN version INTEGER NOT NULL DEFAULT 1')
+        site_columns={r['name'] for r in c.execute('PRAGMA table_info(sites)')}
+        if 'backup_time' not in site_columns:
+            c.execute("ALTER TABLE sites ADD COLUMN backup_time TEXT NOT NULL DEFAULT '02:00'")
+            for site in c.execute('SELECT id,interval_hours FROM sites').fetchall():
+                c.execute('UPDATE sites SET next_run=?,version=version+1 WHERE id=?',(next_schedule(site['interval_hours']),site['id']))
         c.execute('CREATE TABLE IF NOT EXISTS discoveries(server_id TEXT PRIMARY KEY REFERENCES servers(id),captured INTEGER NOT NULL,payload TEXT NOT NULL)')
 
 def server_database_config(server):
@@ -198,7 +226,7 @@ def worker():
                     busy=c.execute("SELECT 1 FROM jobs WHERE site_id=? AND status IN ('queued','running')",(site['id'],)).fetchone()
                     if not busy:
                         c.execute('INSERT INTO jobs(id,site_id,kind,status,created) VALUES(?,?,?,?,?)',(secrets.token_hex(12),site['id'],'backup','queued',now()))
-                    c.execute('UPDATE sites SET next_run=? WHERE id=?',(now()+site['interval_hours']*3600,site['id']))
+                    c.execute('UPDATE sites SET next_run=? WHERE id=?',(next_schedule(site['interval_hours'],site['backup_time'],previous=site['next_run']),site['id']))
                 job=c.execute("SELECT * FROM jobs WHERE status='queued' ORDER BY created LIMIT 1").fetchone()
                 if job:
                     c.execute("UPDATE jobs SET status='running',started=? WHERE id=?",(now(),job['id']))

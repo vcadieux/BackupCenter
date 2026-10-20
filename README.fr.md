@@ -70,13 +70,17 @@ La restauration actuelle extrait uniquement dans un **nouveau dossier isolé du 
 
 La sauvegarde globale inclut les fichiers accessibles de la partition racine et toutes les bases logiques. Elle exclut les systèmes virtuels, `/mnt`, `/media`, les fichiers MySQL bruts, Docker et le swap. Les volumes montés séparément demandent des sources supplémentaires. Ce n’est **ni une image disque démarrable ni un snapshot OVHcloud**.
 
-Les copies sont complètes, sans incrémental. Prévoir assez d’espace temporaire pour les fichiers compressés, le ZIP et sa copie de vérification. « Tous les 30 jours » correspond à 720 heures. Les alertes externes et snapshots fournisseur automatiques ne sont pas implémentés.
+Les copies sont complètes, sans incrémental. Prévoir assez d’espace temporaire pour les fichiers compressés, le ZIP et sa copie de vérification. Les alertes externes et snapshots fournisseur automatiques ne sont pas implémentés.
 
 ## Développement et dépôt
 
 Consulter les [tests](docs-validation.md). Les données, clés, `.env`, captures et notes personnelles doivent rester dans les dossiers privés ignorés. Ne pas les ajouter avec `git add -f`. `.env.example` contient uniquement des exemples génériques. Aucun dépôt GitHub n’est créé ou publié automatiquement.
 
 Cette application peut conserver des accès SSH administrateur et des identifiants MySQL. Vérifier le code et les permissions avant un usage critique. Une archive vérifiée ne remplace pas un exercice de restauration.
+
+## Heure des sauvegardes
+
+L’heure par défaut est **02:00**, dans le fuseau `TZ` configuré. Elle se règle par source ou lors de la découverte des sites. Les fréquences quotidienne, hebdomadaire et de 30 jours conservent l’heure locale malgré les changements d’heure. Une heure inexistante au printemps est décalée du saut horaire; une heure répétée en automne ne s’exécute qu’une fois. Les sources existantes passent à 02:00. Les fréquences de moins de 24 heures se répètent à partir de l’heure choisie.
 
 ## Soutenir le projet
 

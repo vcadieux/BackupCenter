@@ -118,6 +118,7 @@ function render() {
   const success = state.jobs.filter(j => j.kind === 'backup' && j.status === 'success' && j.archive),
     active = state.jobs.filter(j => ['running', 'queued'].includes(j.status));
   const failed = state.sites.filter(s => state.jobs.find(j => j.site_id === s.id && j.kind === 'backup')?.status === 'failed');
+  $$('.schedule-zone').forEach(el => el.textContent = t('Fuseau horaire : ') + (state.schedule_timezone || 'UTC'));
   $('#stats').innerHTML = [[t('Sources configurées'), state.sites.length, state.sites.filter(s => s.enabled).length + t(' planification(s) active(s)')], [t('Archives conservées'), state.archive_summary?.count ?? success.length, t('Archives chiffrées et vérifiées')], [t('Tâches à suivre'), active.length + failed.length, active.length + t(' en cours ou en attente · ') + failed.length + t(' échec(s)')], [t('Espace disponible'), bytes(state.storage.free), t('Sur le stockage des archives')]].map(([label, value, note]) => html`<article class="stat"><small>${label}</small><strong>${value}</strong><div class="stat-note">${note}</div>${label === t('Archives conservées') ? m('<button data-view="archives">Consulter les archives →</button>') : ''}</article>`).join('');
   $('#hero-desc').textContent = state.sites.length ? html`${state.sites.length} source(s) configurée(s). Consultez les dernières copies et surveillez les échéances.` : t('Ajoutez votre premier serveur pour commencer à protéger vos sites.');
   const empty = m('<div class="empty"><span class="card-icon">＋</span><h3>Un premier site à mettre à l’abri ?</h3><p>Connectez votre VPS, puis choisissez ses fichiers et ses bases de données.</p><button class="primary" data-action="add-server">Connecter mon serveur</button></div>');
@@ -167,6 +168,7 @@ function showSite(site = null, serverId = null, global = false) {
   if (serverId) f.elements.server_id.value = serverId;
   if (site) {
     for (const key of ['id', 'version', 'name', 'server_id', 'scope', 'path', 'interval_hours', 'retention']) f.elements[key].value = site[key];
+    f.elements.backup_time.value = site.backup_time || '02:00';
     f.elements.databases.value = site.databases.join(', ');
     f.elements.enabled.checked = !!site.enabled;
     f.elements.files_only.checked = site.scope === 'site' && !site.databases.length;

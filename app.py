@@ -92,7 +92,7 @@ def state():
     if session.get('auth'):
         with E.db() as c:
             servers=[dict(x) for x in c.execute('SELECT id,name,host,port,username,fingerprints,created,version FROM servers ORDER BY created')]
-            sites=[dict(x) for x in c.execute('SELECT id,server_id,name,path,scope,databases,interval_hours,retention,next_run,enabled,version FROM sites ORDER BY name')]
+            sites=[dict(x) for x in c.execute('SELECT id,server_id,name,path,scope,databases,interval_hours,retention,next_run,enabled,version,backup_time FROM sites ORDER BY name')]
             jobs=[dict(x) for x in c.execute('SELECT jobs.*,sites.name AS site_name FROM jobs LEFT JOIN sites ON sites.id=jobs.site_id ORDER BY created DESC LIMIT 100')]
             archive_summary=dict(c.execute("SELECT count(*) AS count,coalesce(sum(size),0) AS bytes FROM jobs WHERE kind='backup' AND status='success' AND archive IS NOT NULL").fetchone())
             audits=[dict(x) for x in c.execute('SELECT * FROM audit ORDER BY id DESC LIMIT 30')]
@@ -110,7 +110,7 @@ def state():
             server['mysql_user']=config.get('mysql_user','')
             server['mysql_host']=config.get('mysql_host','')
         usage=shutil.disk_usage(E.ARCHIVES)
-        out.update(servers=servers,sites=sites,jobs=jobs,audit=audits,username=E.setting('username'),totp=bool(E.setting('totp')),storage={'free':usage.free,'total':usage.total,'directory':os.environ.get('BC_ARCHIVE_DISPLAY_PATH','/mnt/user/backups/backupcenter')},archive_summary=archive_summary,archive_format=translate('ZIP chiffré age'))
+        out.update(schedule_timezone=os.environ.get('TZ','UTC'),servers=servers,sites=sites,jobs=jobs,audit=audits,username=E.setting('username'),totp=bool(E.setting('totp')),storage={'free':usage.free,'total':usage.total,'directory':os.environ.get('BC_ARCHIVE_DISPLAY_PATH','/mnt/user/backups/backupcenter')},archive_summary=archive_summary,archive_format=translate('ZIP chiffré age'))
     return jsonify(out)
 
 @app.get('/api/archives')
@@ -311,14 +311,14 @@ def import_sites(id):
             if token not in candidates or token in seen: raise ValueError('Sélection invalide ou répétée. Relancez la détection.')
             seen.add(token); item=candidates[token]
             # Les chemins viennent du résultat serveur, jamais d'un chemin fourni par le navigateur.
-            values=site_values({'server_id':id,'name':item['name'],'path':item['path'],'scope':'site','databases':chosen.get('databases',[]),'files_only':bool(chosen.get('files_only')),'use_server_db':True,'interval_hours':d.get('interval_hours',24),'retention':d.get('retention',14),'enabled':bool(d.get('enabled'))})
+            values=site_values({'server_id':id,'name':item['name'],'path':item['path'],'scope':'site','databases':chosen.get('databases',[]),'files_only':bool(chosen.get('files_only')),'use_server_db':True,'interval_hours':d.get('interval_hours',24),'backup_time':d.get('backup_time','02:00'),'retention':d.get('retention',14),'enabled':bool(d.get('enabled'))})
             prepared.append((secrets.token_hex(12),values))
         with E.db() as c:
             c.execute('BEGIN IMMEDIATE')
             if c.execute('SELECT version FROM servers WHERE id=?',(id,)).fetchone()['version']!=json.loads(snapshot['payload']).get('server_version'): raise ValueError('Le serveur a changé. Relancez la détection.')
             for source_id,values in prepared:
                 if c.execute("SELECT 1 FROM sites WHERE server_id=? AND scope='site' AND (path=? OR name=?)",(id,values[2],values[1])).fetchone(): raise ValueError('Un des sites est déjà configuré. Aucun site ajouté; relancez la détection.')
-                c.execute('INSERT INTO sites(id,server_id,name,path,scope,databases,db_config,interval_hours,retention,next_run,enabled) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(source_id,)+values)
+                c.execute('INSERT INTO sites(id,server_id,name,path,scope,databases,db_config,interval_hours,retention,next_run,enabled,backup_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(source_id,)+values)
         E.audit(str(len(prepared))+' site(s) ajouté(s) depuis la détection du serveur '+id)
         return jsonify(ids=[i for i,_ in prepared])
     except (ValueError,TypeError) as e: return fail(str(e))
@@ -364,13 +364,14 @@ def site_values(d):
     if (names or scope=='server') and not config.get('inherit_server') and not config.get('mysql_cnf') and not config.get('mysql_user'): raise ValueError('Indiquez un fichier MySQL distant protégé ou un compte MySQL.')
     hours=int(d.get('interval_hours',24)); retention=int(d.get('retention',14))
     if not 1<=hours<=8760 or not 1<=retention<=365: raise ValueError('Fréquence ou rétention invalide.')
-    return (server_id,name,path,scope,json.dumps(sorted(set(names))),E.encrypt(json.dumps(config)),hours,retention,E.now()+hours*3600,int(bool(d.get('enabled'))))
+    clock=d.get('backup_time','02:00')
+    return (server_id,name,path,scope,json.dumps(sorted(set(names))),E.encrypt(json.dumps(config)),hours,retention,E.next_schedule(hours,clock),int(bool(d.get('enabled'))),clock)
 
 @app.post('/api/sites')
 def add_site():
     try:
         values=site_values(body()); id=secrets.token_hex(12)
-        with E.db() as c: c.execute('INSERT INTO sites(id,server_id,name,path,scope,databases,db_config,interval_hours,retention,next_run,enabled) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(id,)+values)
+        with E.db() as c: c.execute('INSERT INTO sites(id,server_id,name,path,scope,databases,db_config,interval_hours,retention,next_run,enabled,backup_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(id,)+values)
         E.audit('Source ajoutée : '+values[1]); return jsonify(id=id)
     except (ValueError,TypeError) as e: return fail(str(e))
 
@@ -383,9 +384,12 @@ def update_site(id):
         if not d.get('mysql_password') and not d.get('clear_db_credentials'):
             for k,v in config.items():
                 if not d.get(k): d[k]=v
+        d.setdefault('backup_time',old['backup_time'])
         values=site_values(d)
+        if values[6]==old['interval_hours'] and values[10]==old['backup_time'] and values[9]==old['enabled']:
+            values=values[:8]+(old['next_run'],)+values[9:]
         with E.db() as c:
-            r=c.execute('UPDATE sites SET server_id=?,name=?,path=?,scope=?,databases=?,db_config=?,interval_hours=?,retention=?,next_run=?,enabled=?,version=version+1 WHERE id=? AND version=?',values+(id,int(d.get('version',0))))
+            r=c.execute('UPDATE sites SET server_id=?,name=?,path=?,scope=?,databases=?,db_config=?,interval_hours=?,retention=?,next_run=?,enabled=?,backup_time=?,version=version+1 WHERE id=? AND version=?',values+(id,int(d.get('version',0))))
             if not r.rowcount: return fail('Configuration modifiée ailleurs. Actualisez.',409)
         E.audit('Source modifiée : '+values[1]); return jsonify(ok=True)
     except (ValueError,TypeError) as e: return fail(str(e))
