@@ -4,6 +4,19 @@
 
 A self-hosted backup dashboard for CloudPanel websites and Linux VPS servers. Back up over SSH to your own storage, manage schedules and retention, download encrypted archives, and test recovery in isolated folders.
 
+
+## Screenshots
+
+English interface shown with fictional demonstration data; no real servers, credentials or backups are displayed.
+
+**Dashboard: sources, schedules and backup status**
+
+![Dashboard: sources, schedules and backup status](docs/images/backupcenter-overview.jpg)
+
+**Archive browser: storage, downloads and isolated recovery**
+
+![Archive browser: storage, downloads and isolated recovery](docs/images/backupcenter-archives.jpg)
+
 ## Features
 
 - English and French interface, remembered per browser; localized dates and API messages.

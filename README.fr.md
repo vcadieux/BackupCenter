@@ -4,6 +4,19 @@
 
 Interface de sauvegarde auto-hébergée pour les sites CloudPanel et les VPS Linux. Sauvegardez par SSH sur votre propre stockage, planifiez les copies, consultez les archives et testez la récupération dans des dossiers isolés.
 
+
+## Captures d’écran
+
+Interface anglaise présentée avec des données fictives de démonstration; aucun serveur, accès ou fichier de sauvegarde réel n’est affiché.
+
+**Tableau de bord : sources, horaires et état des sauvegardes**
+
+![Tableau de bord : sources, horaires et état des sauvegardes](docs/images/backupcenter-overview.jpg)
+
+**Archives : stockage, téléchargements et récupération isolée**
+
+![Archives : stockage, téléchargements et récupération isolée](docs/images/backupcenter-archives.jpg)
+
 ## Fonctionnalités
 
 - Interface français/anglais, choix mémorisé par navigateur, dates et messages d’API traduits.
