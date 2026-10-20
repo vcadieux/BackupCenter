@@ -1,0 +1,85 @@
+# BackupCenter
+
+[Français](README.fr.md) · English
+
+A self-hosted backup dashboard for CloudPanel websites and Linux VPS servers. Back up over SSH to your own storage, manage schedules and retention, download encrypted archives, and test recovery in isolated folders.
+
+## Features
+
+- English and French interface, remembered per browser; localized dates and API messages.
+- Dedicated Ed25519 key generation when adding a server. The private key is prefilled; a public-key installation command is ready to copy into a trusted provider console.
+- SSH host fingerprint verification; existing connections never rotate keys automatically.
+- One connection per VPS, CloudPanel folder/NGINX site discovery, alias grouping, and explicit selection of sites and databases.
+- MySQL credentials configured once per server, with optional per-site overrides.
+- Manual and scheduled backups; encrypted `.zip.age` archives containing files, SQL dumps, and a checksum manifest.
+- Archive browser with source filters, pagination, storage paths, and ZIP/encrypted downloads.
+- Password authentication, optional TOTP, CSRF protection, encrypted stored credentials, audit events, and configuration version checks.
+
+## Run with Docker Compose
+
+Requires Docker Compose and an HTTPS reverse proxy or tunnel. The bundled proxy binds to `127.0.0.1:8080` by default.
+
+```sh
+cp .env.example .env
+# Edit .env: domain, local storage paths, bind address, timezone.
+docker compose up -d --build
+```
+
+Point your existing HTTPS proxy at the configured listener. Keep `BACKUPCENTER_SECURE_COOKIE=1` for HTTPS. A containerized tunnel may require a suitable network route or a different bind address; expose only the intended listener. Use absolute storage paths for production, for example `/mnt/user/appdata/backupcenter/data` and `/mnt/user/backups/backupcenter` on Unraid.
+
+Retrieve the first-run setup code from your own terminal, then enter it in the web interface:
+
+```sh
+docker compose exec backupcenter cat /data/setup-code.txt
+```
+
+Create an administrator password (at least 14 characters), enable TOTP, and download the archive recovery key. Keep that key and a protected copy of the application configuration outside this machine.
+
+## Connect a VPS
+
+1. Add the hostname/IP, SSH port, and user. Root is required for all-site/system access in this version; a restricted user can only back up accessible resources.
+2. A dedicated private key is generated and prefilled. Copy only the displayed **public-key installation command** into a trusted provider console. It preserves existing authorized keys.
+3. Save the server. Compare its SSH fingerprints against the provider console before trusting them.
+4. Test SSH, discover sites, and explicitly confirm the databases for each site. Run a manual backup before enabling schedules.
+
+The installation command grants the selected account’s privileges. For root this is administrator access. The `restrict` SSH option disables forwarding and interactive terminals; it does not make root commands read-only. Existing keys are kept unless you explicitly generate and save a replacement. Generating a new pair does not revoke old public keys on the VPS.
+
+Never paste a private key into the VPS console, a chat, an issue, or a repository. Generated private keys are returned only to the authenticated form over your HTTPS connection, not stored in cookies, and encrypted when the server connection is saved.
+
+See [SSH setup](docs/vps-access.md).
+
+## Database discovery and consistency
+
+The remote server needs Python 3, GNU tar, and MySQL/MariaDB client tools. Automatic MySQL mode tries a protected `/root/.my.cnf` or root’s default local database connection. Linux root access does not guarantee MySQL access; configure a protected remote client file or MySQL credentials if necessary. MySQL need not be exposed to the Internet.
+
+Discovery reads common `.env`, WordPress, and PHP configurations without executing application code. Accessible databases are not proof of site ownership: review each selection. Custom layouts and dynamic configuration require manual selection.
+
+Files are copied while the site is running; MySQL uses transactional dumps. This alone does not ensure consistency between files and SQL or for non-transactional tables. Quiesce writes when application consistency requires it.
+
+## Archives and recovery
+
+A backup contains `files.tar.gz`, SQL dumps, and `manifest.json`. The ZIP is verified, encrypted with age, decrypted for verification, then published atomically. Retention removes old copies only after a new successful backup.
+
+The archive browser displays the configured host storage path. ZIP downloads are decrypted; encrypted downloads require the recovery key:
+
+```sh
+age -d -i BackupCenter-recovery.key -o backup.zip archive.zip.age
+```
+
+Restoration currently transfers and extracts into a **new isolated folder on the source server**, requiring Python 3.12+. It does not replace live files or import production databases. Full CloudPanel reconstruction, production SQL imports, and bare-metal recovery require a separately tested procedure.
+
+A full VPS backup covers accessible files on the root filesystem and all logical databases. It excludes virtual filesystems, `/mnt`, `/media`, raw MySQL files, Docker data, and swap. Separate mounted volumes need additional sources. It is **not a bootable disk image** or an OVHcloud snapshot.
+
+Copies are full archives, not incremental. Provision sufficient temporary space for the compressed files, ZIP, and decrypted verification copy. Schedules are hour intervals; “every 30 days” means 720 hours. External notifications and provider snapshot automation are not implemented.
+
+## Development and repository hygiene
+
+See [testing](docs-validation.md). Runtime data, keys, `.env`, personal deployment notes, and screenshots belong in ignored local/private directories. Do not add them with `git add -f`. `.env.example` contains only generic values. No GitHub repository is created or published by this project setup.
+
+This application can hold administrator SSH and database credentials. Review the code and deployment permissions before using it for critical systems. A verified archive is not a substitute for a restoration drill.
+
+## Support the project
+
+If BackupCenter helps you, you can support its development via PayPal.
+
+[☕ Buy me a coffee](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=vcadieux%40vincentcadieux.com&item_name=BackupCenter&currency_code=CAD)
