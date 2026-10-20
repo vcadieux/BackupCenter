@@ -1,0 +1,2 @@
+FROM nginx:stable-alpine
+RUN addgroup -g 10001 backupcenter && addgroup nginx backupcenter
