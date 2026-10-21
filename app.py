@@ -465,11 +465,12 @@ def maintenance_history(id):
 @app.post('/api/servers/<id>/maintenance')
 def maintenance_create(id):
     server=getrow('servers',id);d=body()
-    if not reauth(d):return fail('Authentification incorrecte.',403)
+    mode=d.get('mode')
+    if mode not in ['check','upgrade']:return fail('Opération invalide.',400)
+    if mode=='upgrade' and not reauth(d):return fail('Authentification incorrecte.',403)
     try:
-        mode=d.get('mode')
         if int(d.get('version',0))!=server['version']:return fail('Serveur modifié ailleurs. Actualisez.',409)
-        if mode=='upgrade' and d.get('confirm')!=server['name']:return fail('Recopiez le nom exact du serveur pour confirmer.',400)
+        if mode=='upgrade' and str(d.get('confirm','')).strip().casefold() not in ['oui','yes']:return fail('Écrivez Oui pour confirmer l’installation.',400)
         return jsonify(id=M.create(server,mode,d.get('preview')))
     except (ValueError,TypeError) as e:return fail(str(e),400)
 

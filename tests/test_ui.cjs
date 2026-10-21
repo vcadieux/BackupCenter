@@ -19,7 +19,7 @@ w.fetch=async(url,options={})=>{
  if(url.endsWith('/import'))result={ids:['new-site']};
  return {ok:true,json:async()=>structuredClone(result)};
 };
-w.eval(fs.readFileSync(root+'/public/messages.js','utf8'));w.eval(fs.readFileSync(root+'/public/i18n.js','utf8'));if(language==='en'){const walk=w.document.createTreeWalker(w.document.body,w.NodeFilter.SHOW_TEXT);while(walk.nextNode()){const n=walk.currentNode;if(n.parentElement.closest('script,textarea,code,pre,[translate="no"]'))continue;const text=n.nodeValue.trim();if(w.BC_MESSAGES[text]&&w.BC_MESSAGES[text]!==text)throw Error('Untranslated static text: '+text);}}w.eval(fs.readFileSync(root+'/public/app.js','utf8'));
+w.eval(fs.readFileSync(root+'/public/messages.js','utf8'));w.eval(fs.readFileSync(root+'/public/i18n.js','utf8'));if(language==='en'){const walk=w.document.createTreeWalker(w.document.body,w.NodeFilter.SHOW_TEXT);while(walk.nextNode()){const n=walk.currentNode;if(n.parentElement.closest('script,textarea,code,pre,[translate="no"]'))continue;const text=n.nodeValue.trim();if(w.BC_MESSAGES[text]&&w.BC_MESSAGES[text]!==text)throw Error('Untranslated static text: '+text);}}w.eval(fs.readFileSync(root+'/public/app.js','utf8')+'\nwindow.BC_TEST_TOAST=toast;');
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 (async()=>{
  await flush();assert.equal(w.document.querySelector('#workspace').hidden,false);
@@ -53,6 +53,9 @@ const flush=()=>new Promise(resolve=>setImmediate(resolve));
  assert.equal(w.document.querySelector('#server-modal-title').textContent,language==='en'?'Add a VPS':'Ajouter un VPS');
  w.document.querySelector('#server-dialog').close();
  w.document.querySelector('[data-maintenance]').click();await flush();assert(w.document.querySelector('#maintenance-dialog').open);assert(w.document.querySelector('#maintenance-upgrade').disabled);
- const mf=w.document.querySelector('#maintenance-form');mf.elements.password.value='fixture password';mf.dispatchEvent(new w.SubmitEvent('submit',{bubbles:true,cancelable:true,submitter:mf.querySelector('[value=check]')}));await flush();assert.equal(mf.elements.password.value,'');assert(requests.some(r=>r.url.endsWith('/maintenance')&&r.data?.mode==='check'));
+ const mf=w.document.querySelector('#maintenance-form');assert(mf.querySelector('[value=check]').formNoValidate);assert(w.document.querySelector('#maintenance-install-fields').hidden);mf.elements.password.value='fixture password';mf.dispatchEvent(new w.SubmitEvent('submit',{bubbles:true,cancelable:true,submitter:mf.querySelector('[value=check]')}));await flush();assert.equal(mf.elements.password.value,'');const checked=requests.find(r=>r.url.endsWith('/maintenance')&&r.data?.mode==='check');assert(checked);assert(!('password' in checked.data));assert(!('totp' in checked.data));assert(!('confirm' in checked.data));
+ w.BC_TEST_TOAST('<error fixture>',true);const error=w.document.querySelector('#toast');assert(w.document.querySelector('#maintenance-dialog').contains(error));assert(error.classList.contains('dialog-toast'));assert.equal(error.getAttribute('role'),'alert');assert.equal(error.textContent,'<error fixture>');assert.equal(error.children.length,0);
+ w.document.querySelector('#maintenance-dialog').close();w.BC_TEST_TOAST('outside');assert.equal(error.parentElement,w.document.body);
+ w.document.querySelector('[data-action="add-server"]').click();await flush();w.BC_TEST_TOAST('Server error',true);assert(w.document.querySelector('#server-dialog').contains(error));
  dom.window.close();console.log('Parcours DOM réussi : détection, sélection, import, édition VPS et sauvegarde globale.');
 })().catch(e=>{console.error(e);dom.window.close();process.exitCode=1;});

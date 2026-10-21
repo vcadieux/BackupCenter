@@ -96,9 +96,8 @@ class CenterTests(unittest.TestCase):
     def test_maintenance_auth_confirmation_and_backup_exclusion(self):
         import maintenance as M
         self.setup_admin();server=self.maintenance_server();self.site(server)
-        data=dict(mode='check',version=1,password='bad')
-        self.assertEqual(self.post('servers/'+server+'/maintenance',data).status_code,403)
-        data['password']='a sufficiently long password'
+        data=dict(mode='check',version=1)
+        self.assertEqual(self.client.post('/api/servers/'+server+'/maintenance',json=data).status_code,403)
         self.assertEqual(self.post('servers/'+server+'/maintenance',dict(data,version=9)).status_code,409)
         response=self.post('servers/'+server+'/maintenance',data);self.assertEqual(response.status_code,200,response.json)
         with E.db() as c:site=c.execute('SELECT * FROM sites').fetchone()
@@ -106,14 +105,27 @@ class CenterTests(unittest.TestCase):
         self.assertEqual(self.post('servers/'+server+'/maintenance',data).status_code,400)
         with patch.object(E.SSH,'__exit__',return_value=False),patch.object(E.SSH,'__enter__',return_value=unittest.mock.Mock(call=lambda *a,**k:dict(status='success',packages=['openssl'],digest='a'*64,reboot=False))):M.tick()
         preview=response.json['id']
-        upgrade=dict(data,mode='upgrade',preview=preview,confirm='wrong')
+        upgrade=dict(data,mode='upgrade',preview=preview,confirm='Yes')
+        self.assertEqual(self.post('servers/'+server+'/maintenance',upgrade).status_code,403)
+        upgrade.update(password='a sufficiently long password',confirm='Fixture')
         self.assertEqual(self.post('servers/'+server+'/maintenance',upgrade).status_code,400)
-        upgrade['confirm']='Fixture'
+        upgrade['confirm']=' Oui '
         response=self.post('servers/'+server+'/maintenance',upgrade);self.assertEqual(response.status_code,200,response.json)
         self.assertEqual(self.post('servers/'+server+'/maintenance',upgrade).status_code,400)
         history=self.client.get('/api/servers/'+server+'/maintenance').json
         self.assertNotIn('password',json.dumps(history))
         self.assertNotIn('private_key',json.dumps(history))
+
+    def test_maintenance_check_without_totp_but_upgrade_requires_it(self):
+        self.setup_admin();server=self.maintenance_server()
+        secret='JBSWY3DPEHPK3PXP';E.setsetting('totp',E.encrypt(secret))
+        response=self.post('servers/'+server+'/maintenance',dict(mode='check',version=1))
+        self.assertEqual(response.status_code,200,response.json)
+        with E.db() as c:c.execute("UPDATE maintenance SET status='success',finished=?,result=? WHERE id=?",(E.now(),json.dumps(dict(packages=['openssl'],digest='a'*64)),response.json['id']))
+        payload=dict(mode='upgrade',version=1,preview=response.json['id'],confirm='Yes',password='a sufficiently long password')
+        self.assertEqual(self.post('servers/'+server+'/maintenance',payload).status_code,403)
+        with patch.object(app,'totp',return_value=True):
+            self.assertEqual(self.post('servers/'+server+'/maintenance',dict(payload,totp='fixture')).status_code,200)
 
     def test_maintenance_unknown_outcome_polls_without_relaunch(self):
         import maintenance as M

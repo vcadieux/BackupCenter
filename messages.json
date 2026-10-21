@@ -379,5 +379,8 @@
   "Vérification expirée. Vérifiez à nouveau les mises à jour.": "Check expired. Check for updates again.",
   "Aucun paquet à mettre à jour.": "No packages to upgrade.",
   "Cette vérification a déjà été utilisée.": "This check has already been used.",
-  "Une maintenance serveur est en cours. Réessayez après sa fin.": "Server maintenance is active. Try again when it finishes."
+  "Une maintenance serveur est en cours. Réessayez après sa fin.": "Server maintenance is active. Try again when it finishes.",
+  "Écrivez Oui pour confirmer l’installation": "Type Yes to confirm installation",
+  "Écrivez Oui pour confirmer l’installation.": "Type Yes to confirm installation.",
+  "Oui": "Yes"
 }

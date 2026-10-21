@@ -34,7 +34,13 @@ const bytes = n => {
 function toast(message, error = false) {
   const el = $('#toast');
   el.textContent = message;
-  el.className = error ? 'error' : '';
+  const dialog = [...document.querySelectorAll('dialog[open]')].at(-1);
+  if (dialog) {
+    const head=dialog.querySelector('.modal-head');
+    if(head)head.after(el);else dialog.prepend(el);
+  } else document.body.append(el);
+  el.className = (error ? 'error ' : '') + (dialog ? 'dialog-toast' : '');
+  el.setAttribute('role',error ? 'alert' : 'status');
   el.hidden = false;
   clearTimeout(window.toastTimer);
   window.toastTimer = setTimeout(() => el.hidden = true, 8000);
@@ -602,6 +608,7 @@ async function loadMaintenance() {
   $('#maintenance-status').textContent=latest ? (latest.mode==='check'?t('Vérification'):t('Installation'))+' · '+labels[latest.status]+(latest.result.phase?' · '+(phases[latest.result.phase]||''):'')+(latest.result.reason && reasons[latest.result.reason]?' · '+reasons[latest.result.reason]:'')+(latest.result.reboot?' · '+t('Redémarrage du VPS requis (à effectuer manuellement).'):'') : t('Aucune vérification effectuée.');
   const packages=(maintenancePreview||latest)?.result.packages||[];
   $('#maintenance-packages').innerHTML=packages.length ? html`<details open><summary>${packages.length} ${t('paquet(s) dans le plan de mise à jour')}</summary><pre>${esc(packages.join('\n'))}</pre></details>` : '';
+  $('#maintenance-install-fields').hidden=maintenanceBusy || !maintenancePreview || !packages.length;
   $('#maintenance-upgrade').disabled=maintenanceBusy || !maintenancePreview || !packages.length;
   $('#maintenance-form [value="check"]').disabled=maintenanceBusy;
 }
@@ -609,18 +616,24 @@ document.addEventListener('click',e=>{
   const b=e.target.closest('[data-maintenance]');if(!b)return;
   maintenanceServer=state.servers.find(s=>s.id===b.dataset.maintenance);maintenancePreview=null;
   $('#maintenance-form').reset();$('#maintenance-title').textContent=t('Mises à jour du système')+' · '+maintenanceServer.name;
-  $('#maintenance-status').textContent=t('Chargement…');$('#maintenance-packages').innerHTML='';$('#maintenance-upgrade').disabled=true;
+  $('#maintenance-install-fields').hidden=true;$('#maintenance-status').textContent=t('Chargement…');$('#maintenance-packages').innerHTML='';$('#maintenance-upgrade').disabled=true;
   $('#maintenance-dialog').showModal();action(loadMaintenance);
 });
 $('#maintenance-form').addEventListener('submit',e=>{
   e.preventDefault();const mode=e.submitter.value;
   action(async()=>{
     if(maintenanceBusy)throw Error(t('Une opération est déjà en cours. Réessayez après sa fin.'));
-    if(mode==='upgrade' && (!maintenancePreview || e.target.elements.confirm.value!==maintenanceServer.name))throw Error(t('Recopiez le nom exact du serveur pour confirmer.'));
-    const data=formData(e.target);data.mode=mode;data.version=maintenanceServer.version;data.preview=maintenancePreview?.id;
+    if(mode==='upgrade' && (!maintenancePreview || !['oui','yes'].includes(e.target.elements.confirm.value.trim().toLowerCase())))throw Error(t('Écrivez Oui pour confirmer l’installation.'));
+    const data=mode==='check'?{}:formData(e.target);data.mode=mode;data.version=maintenanceServer.version;if(mode==='upgrade')data.preview=maintenancePreview?.id;
     $('#maintenance-upgrade').disabled=true;$('#maintenance-form [value="check"]').disabled=true;
     try {await api('servers/'+maintenanceServer.id+'/maintenance',data);}finally{e.target.elements.password.value='';e.target.elements.totp.value='';await loadMaintenance();}
   });
 });
 setInterval(()=>{if($('#maintenance-dialog').open)action(loadMaintenance);},3000);
 $('#maintenance-dialog').addEventListener('close',()=>{$('#maintenance-form').reset();maintenanceServer=null;maintenancePreview=null;});
+
+document.addEventListener('close',event=>{
+  if(event.target.tagName==='DIALOG' && event.target.contains($('#toast'))){
+    const el=$('#toast');el.hidden=true;document.body.append(el);el.classList.remove('dialog-toast');
+  }
+},true);
