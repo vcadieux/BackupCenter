@@ -9,7 +9,7 @@ from i18n import translate
 E.init()
 app=Flask(__name__,static_folder='public',static_url_path='/static')
 app.secret_key=(E.DATA/'session.key').read_text()
-app.config.update(SESSION_COOKIE_NAME='backupcenter',SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SECURE=os.environ.get('BC_SECURE_COOKIE','1')=='1',SESSION_COOKIE_SAMESITE='Strict',PERMANENT_SESSION_LIFETIME=timedelta(hours=8),MAX_CONTENT_LENGTH=128*1024)
+app.config.update(SESSION_COOKIE_NAME='backupcenter',SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SECURE=os.environ.get('BC_SECURE_COOKIE','1')=='1',SESSION_COOKIE_SAMESITE='Strict',PERMANENT_SESSION_LIFETIME=timedelta(days=30),SESSION_REFRESH_EACH_REQUEST=True,MAX_CONTENT_LENGTH=128*1024)
 
 def fail(message,status=400): return jsonify(error=translate(message)),status
 

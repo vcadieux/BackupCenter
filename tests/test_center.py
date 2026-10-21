@@ -72,6 +72,22 @@ class CenterTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/state').json['sites'][0]['next_run'],updated['next_run'])
         self.assertEqual(self.post('sites',dict(payload,backup_time='25:00')).status_code,400)
 
+    def test_extended_session(self):
+     from datetime import timedelta
+     from itsdangerous import TimestampSigner,SignatureExpired
+     self.assertEqual(app.app.permanent_session_lifetime,timedelta(days=30))
+     self.assertTrue(app.app.config['SESSION_REFRESH_EACH_REQUEST'])
+     self.setup_admin()
+     response=self.client.get('/api/state');cookie=response.headers['Set-Cookie']
+     self.assertIn('Expires=',cookie);self.assertIn('HttpOnly',cookie);self.assertIn('SameSite=Strict',cookie)
+     token=self.client.get_cookie('backupcenter').value
+     serializer=app.app.session_interface.get_signing_serializer(app.app)
+     issued=TimestampSigner('fixture').get_timestamp()
+     with patch.object(TimestampSigner,'get_timestamp',return_value=issued+29*86400):self.assertTrue(serializer.loads(token,max_age=30*86400)['auth'])
+     with patch.object(TimestampSigner,'get_timestamp',return_value=issued+31*86400):
+      with self.assertRaises(SignatureExpired):serializer.loads(token,max_age=30*86400)
+     self.post('logout',{});self.assertFalse(self.client.get('/api/state').json['authenticated'])
+
     def test_auth_csrf_setup_and_secret_redaction(self):
         self.assertEqual(self.client.post('/api/setup',json={}).status_code,403)
         self.assertEqual(self.post('servers',{}).status_code,401)

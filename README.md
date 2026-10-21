@@ -5,6 +5,8 @@
 A self-hosted backup dashboard for CloudPanel websites and Linux VPS servers. Back up over SSH to your own storage, manage schedules and retention, download encrypted archives, and test recovery in isolated folders.
 
 
+Browser sessions last 30 days and renew with activity. Signing out clears the browser session; password or TOTP changes invalidate other sessions.
+
 ## Screenshots
 
 English interface shown with fictional demonstration data; no real servers, credentials or backups are displayed.

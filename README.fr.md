@@ -5,6 +5,8 @@
 Interface de sauvegarde auto-hébergée pour les sites CloudPanel et les VPS Linux. Sauvegardez par SSH sur votre propre stockage, planifiez les copies, consultez les archives et testez la récupération dans des dossiers isolés.
 
 
+Les sessions navigateur durent 30 jours et se renouvellent avec l’activité. La déconnexion efface la session du navigateur; un changement de mot de passe ou de TOTP révoque les autres sessions.
+
 ## Captures d’écran
 
 Interface anglaise présentée avec des données fictives de démonstration; aucun serveur, accès ou fichier de sauvegarde réel n’est affiché.
