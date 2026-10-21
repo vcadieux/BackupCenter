@@ -28,3 +28,5 @@ dialog label{font-size:13px}dialog textarea{padding:13px;border-radius:9px}dialo
 #maintenance-dialog{padding:22px}#maintenance-dialog p{font-size:12px}#maintenance-dialog details{margin-top:12px;padding:12px}#maintenance-dialog pre{max-height:120px;margin:8px 0 0;padding:10px}#maintenance-dialog label{margin:12px 0}#maintenance-dialog .modal-actions{position:sticky;bottom:-22px;background:white;padding:14px 0;margin-top:16px;box-shadow:0 -8px 12px #fff}
 
 #toast.dialog-toast{position:sticky;top:0;bottom:auto;left:auto;transform:none;max-width:100%;width:auto;margin:12px 0;padding:13px 16px;z-index:1000;font-size:13px;overflow-wrap:anywhere}
+
+#maintenance-dialog .modal-head{gap:16px;align-items:flex-start}#maintenance-dialog .modal-head>div:first-child{min-width:0}#maintenance-title{overflow-wrap:anywhere}.maintenance-heading-actions{display:flex;gap:12px;align-items:center;flex-shrink:0}#maintenance-check{font-size:13px;padding:11px 15px;color:white;min-height:44px}@media(max-width:760px){#maintenance-dialog .modal-head{flex-direction:column}.maintenance-heading-actions{align-self:stretch;justify-content:flex-end}#maintenance-check{font-size:12px}}

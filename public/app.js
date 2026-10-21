@@ -593,15 +593,15 @@ setInterval(() => {
   if (state.authenticated && !$$('dialog[open]').length) action(refresh);
 }, 12000);
 
-let maintenanceServer=null, maintenancePreview=null, maintenanceBusy=false;
+let maintenanceServer=null, maintenancePreview=null, maintenanceBusy=false, maintenanceSubmitting=false, maintenanceRequest=0;
 async function loadMaintenance() {
-  const server=maintenanceServer;if(!server)return;
+  const server=maintenanceServer;if(!server)return;const request=++maintenanceRequest;
   const r=await api('servers/'+server.id+'/maintenance');
-  if(maintenanceServer!==server || !$('#maintenance-dialog').open)return;
+  if(maintenanceServer!==server || request!==maintenanceRequest || !$('#maintenance-dialog').open)return;
   const active=r.items.find(x=>['queued','running','unknown'].includes(x.status));
   const latest=r.items[0];
-  maintenanceBusy=!!active;
-  maintenancePreview=!active && r.items.find(x=>x.mode==='check' && x.status==='success' && x.server_version===server.version && x.finished>Date.now()/1000-900 && !r.items.some(u=>u.preview===x.id));
+  maintenanceBusy=!!active || maintenanceSubmitting;
+  maintenancePreview=!maintenanceBusy && r.items[0]?.mode==='check' && r.items.slice(0,1).find(x=>x.mode==='check' && x.status==='success' && x.server_version===server.version && x.finished>Date.now()/1000-900 && !r.items.some(u=>u.preview===x.id));
   const labels={queued:t('En attente'),running:t('En cours'),unknown:t('Connexion interrompue : vérification distante en attente. Les sauvegardes restent suspendues.'),success:t('Terminée'),failed:t('Échec. Vérifiez le serveur avant de réessayer.')};
   const phases={starting:t('Démarrage'),refresh:t('Actualisation des index APT'),plan:t('Vérification des paquets'),upgrade:t('Installation des paquets')};
   const reasons={unsupported:t('Root, Debian/Ubuntu et systemd sont requis.'),changed:t('La configuration ou les paquets ont changé. Vérifiez à nouveau.'),refresh:t('Actualisation APT échouée. Vérifiez les dépôts et les verrous sur le VPS.'),launch:t('Démarrage distant impossible.'),upgrade:t('APT a échoué. Une installation partielle est possible; vérifiez le VPS.'),interrupted:t('Opération distante interrompue. Vérifiez le VPS.'),technical:t('Erreur distante. Vérifiez le VPS.')};
@@ -622,11 +622,12 @@ document.addEventListener('click',e=>{
 $('#maintenance-form').addEventListener('submit',e=>{
   e.preventDefault();const mode=e.submitter.value;
   action(async()=>{
-    if(maintenanceBusy)throw Error(t('Une opération est déjà en cours. Réessayez après sa fin.'));
+    if(maintenanceBusy || maintenanceSubmitting)throw Error(t('Une opération est déjà en cours. Réessayez après sa fin.'));
     if(mode==='upgrade' && (!maintenancePreview || !['oui','yes'].includes(e.target.elements.confirm.value.trim().toLowerCase())))throw Error(t('Écrivez Oui pour confirmer l’installation.'));
     const data=mode==='check'?{}:formData(e.target);data.mode=mode;data.version=maintenanceServer.version;if(mode==='upgrade')data.preview=maintenancePreview?.id;
-    $('#maintenance-upgrade').disabled=true;$('#maintenance-form [value="check"]').disabled=true;
-    try {await api('servers/'+maintenanceServer.id+'/maintenance',data);}finally{e.target.elements.password.value='';e.target.elements.totp.value='';await loadMaintenance();}
+    maintenanceSubmitting=true;maintenancePreview=null;++maintenanceRequest;
+    $('#maintenance-install-fields').hidden=true;$('#maintenance-upgrade').disabled=true;$('#maintenance-form [value="check"]').disabled=true;
+    try {await api('servers/'+maintenanceServer.id+'/maintenance',data);}finally{e.target.elements.password.value='';e.target.elements.totp.value='';maintenanceSubmitting=false;await loadMaintenance();}
   });
 });
 setInterval(()=>{if($('#maintenance-dialog').open)action(loadMaintenance);},3000);

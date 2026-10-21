@@ -7,19 +7,19 @@ const w=dom.window;const language=process.env.BC_LANGUAGE||'fr';w.localStorage.s
 w.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};
 w.HTMLDialogElement.prototype.close=function(){this.removeAttribute('open');};
 w.setInterval=()=>0;
-const requests=[];
+const requests=[];let maintenanceItems=[];
 const state={csrf:'fixture',authenticated:true,setup:false,servers:[{id:'server1',version:1,name:'VPS fixture',host:'fixture.example',port:22,username:'root',fingerprints:'fixture',mysql_mode:'auto'}],sites:[],jobs:[],audit:[],storage:{free:1024**4,total:2*1024**4},totp:false};
 w.fetch=async(url,options={})=>{
  const data=options.body?JSON.parse(options.body):null;requests.push({url,data,headers:options.headers});
  let result=state;
- if(url.endsWith('/maintenance'))result={items:[]};
+ if(url.endsWith('/maintenance'))result={items:maintenanceItems};
  if(url.endsWith('/ssh/keypair'))result={private_key:'PRIVATE-KEY-FIXTURE',public_key:'ssh-ed25519 AAAA backupcenter-abcdefabcdef',username:'root'};
  if(url.includes('/archives?'))result={items:[{id:'archive-old',site_id:'site-old',site_name:'Sécurité',server_name:'VPS fixture',filename:'archive-old.zip.age',path:'/mnt/user/backups/backupcenter/archive-old.zip.age',sha256:'fixture',size:1024,created:1,finished:2,available:true}],directory:'/mnt/user/backups/backupcenter',page:1,pages:1,total:1};
  if(url.endsWith('/inventory'))result={sites:[{token:'site1',name:'one.example',path:'/home/one/htdocs/one.example',databases:['one_db'],domains:['one.example','www.one.example'],sources:['vhost NGINX'],configured_id:null},{token:'site2',name:'two.example',path:'/home/two/htdocs/two.example',databases:[],domains:[],sources:['dossiers'],configured_id:'existing'}],mysql:{ok:true,databases:['one_db'],message:'Accès vérifié'},warnings:[]};
  if(url.endsWith('/import'))result={ids:['new-site']};
  return {ok:true,json:async()=>structuredClone(result)};
 };
-w.eval(fs.readFileSync(root+'/public/messages.js','utf8'));w.eval(fs.readFileSync(root+'/public/i18n.js','utf8'));if(language==='en'){const walk=w.document.createTreeWalker(w.document.body,w.NodeFilter.SHOW_TEXT);while(walk.nextNode()){const n=walk.currentNode;if(n.parentElement.closest('script,textarea,code,pre,[translate="no"]'))continue;const text=n.nodeValue.trim();if(w.BC_MESSAGES[text]&&w.BC_MESSAGES[text]!==text)throw Error('Untranslated static text: '+text);}}w.eval(fs.readFileSync(root+'/public/app.js','utf8')+'\nwindow.BC_TEST_TOAST=toast;');
+w.eval(fs.readFileSync(root+'/public/messages.js','utf8'));w.eval(fs.readFileSync(root+'/public/i18n.js','utf8'));if(language==='en'){const walk=w.document.createTreeWalker(w.document.body,w.NodeFilter.SHOW_TEXT);while(walk.nextNode()){const n=walk.currentNode;if(n.parentElement.closest('script,textarea,code,pre,[translate="no"]'))continue;const text=n.nodeValue.trim();if(w.BC_MESSAGES[text]&&w.BC_MESSAGES[text]!==text)throw Error('Untranslated static text: '+text);}}w.eval(fs.readFileSync(root+'/public/app.js','utf8')+'\nwindow.BC_TEST_TOAST=toast;window.BC_TEST_LOAD_MAINTENANCE=loadMaintenance;');
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 (async()=>{
  await flush();assert.equal(w.document.querySelector('#workspace').hidden,false);
@@ -53,6 +53,10 @@ const flush=()=>new Promise(resolve=>setImmediate(resolve));
  assert.equal(w.document.querySelector('#server-modal-title').textContent,language==='en'?'Add a VPS':'Ajouter un VPS');
  w.document.querySelector('#server-dialog').close();
  w.document.querySelector('[data-maintenance]').click();await flush();assert(w.document.querySelector('#maintenance-dialog').open);assert(w.document.querySelector('#maintenance-upgrade').disabled);
+ const checkButton=w.document.querySelector('#maintenance-check');assert(checkButton.closest('.modal-head'));assert(checkButton.classList.contains('primary'));assert.equal(w.document.querySelectorAll('#maintenance-form [value=check]').length,1);
+ const plan={id:'preview1',mode:'check',status:'running',server_version:1,finished:Date.now()/1000,result:{packages:['openssl']}};maintenanceItems=[plan];await w.BC_TEST_LOAD_MAINTENANCE();assert(w.document.querySelector('#maintenance-upgrade').disabled);
+ plan.status='success';await w.BC_TEST_LOAD_MAINTENANCE();assert(!w.document.querySelector('#maintenance-upgrade').disabled);
+ maintenanceItems=[{...plan,id:'preview2',status:'failed'},plan];await w.BC_TEST_LOAD_MAINTENANCE();assert(w.document.querySelector('#maintenance-upgrade').disabled);maintenanceItems=[];await w.BC_TEST_LOAD_MAINTENANCE();
  const mf=w.document.querySelector('#maintenance-form');assert(mf.querySelector('[value=check]').formNoValidate);assert(w.document.querySelector('#maintenance-install-fields').hidden);mf.elements.password.value='fixture password';mf.dispatchEvent(new w.SubmitEvent('submit',{bubbles:true,cancelable:true,submitter:mf.querySelector('[value=check]')}));await flush();assert.equal(mf.elements.password.value,'');const checked=requests.find(r=>r.url.endsWith('/maintenance')&&r.data?.mode==='check');assert(checked);assert(!('password' in checked.data));assert(!('totp' in checked.data));assert(!('confirm' in checked.data));
  w.BC_TEST_TOAST('<error fixture>',true);const error=w.document.querySelector('#toast');assert(w.document.querySelector('#maintenance-dialog').contains(error));assert(error.classList.contains('dialog-toast'));assert.equal(error.getAttribute('role'),'alert');assert.equal(error.textContent,'<error fixture>');assert.equal(error.children.length,0);
  w.document.querySelector('#maintenance-dialog').close();w.BC_TEST_TOAST('outside');assert.equal(error.parentElement,w.document.body);
