@@ -53,7 +53,7 @@ const flush=()=>new Promise(resolve=>setImmediate(resolve));
  assert.equal(w.document.querySelector('#server-modal-title').textContent,language==='en'?'Add a VPS':'Ajouter un VPS');
  w.document.querySelector('#server-dialog').close();
  w.document.querySelector('[data-maintenance]').click();await flush();assert(w.document.querySelector('#maintenance-dialog').open);assert(w.document.querySelector('#maintenance-upgrade').disabled);
- const checkButton=w.document.querySelector('#maintenance-check');assert(checkButton.closest('.modal-head'));assert(checkButton.classList.contains('primary'));assert.equal(w.document.querySelectorAll('#maintenance-form [value=check]').length,1);
+ const checkButton=w.document.querySelector('#maintenance-check');assert(checkButton.closest('.maintenance-status-bar'));assert(checkButton.parentElement.contains(w.document.querySelector('#maintenance-status')));assert(!checkButton.closest('.modal-head'));assert(checkButton.classList.contains('primary'));assert.equal(w.document.querySelectorAll('#maintenance-form [value=check]').length,1);
  const plan={id:'preview1',mode:'check',status:'running',server_version:1,finished:Date.now()/1000,result:{packages:['openssl']}};maintenanceItems=[plan];await w.BC_TEST_LOAD_MAINTENANCE();assert(w.document.querySelector('#maintenance-upgrade').disabled);
  plan.status='success';await w.BC_TEST_LOAD_MAINTENANCE();assert(!w.document.querySelector('#maintenance-upgrade').disabled);
  maintenanceItems=[{...plan,id:'preview2',status:'failed'},plan];await w.BC_TEST_LOAD_MAINTENANCE();assert(w.document.querySelector('#maintenance-upgrade').disabled);maintenanceItems=[];await w.BC_TEST_LOAD_MAINTENANCE();
