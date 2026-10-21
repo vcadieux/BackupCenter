@@ -12,6 +12,7 @@ const state={csrf:'fixture',authenticated:true,setup:false,servers:[{id:'server1
 w.fetch=async(url,options={})=>{
  const data=options.body?JSON.parse(options.body):null;requests.push({url,data,headers:options.headers});
  let result=state;
+ if(url.endsWith('/maintenance'))result={items:[]};
  if(url.endsWith('/ssh/keypair'))result={private_key:'PRIVATE-KEY-FIXTURE',public_key:'ssh-ed25519 AAAA backupcenter-abcdefabcdef',username:'root'};
  if(url.includes('/archives?'))result={items:[{id:'archive-old',site_id:'site-old',site_name:'Sécurité',server_name:'VPS fixture',filename:'archive-old.zip.age',path:'/mnt/user/backups/backupcenter/archive-old.zip.age',sha256:'fixture',size:1024,created:1,finished:2,available:true}],directory:'/mnt/user/backups/backupcenter',page:1,pages:1,total:1};
  if(url.endsWith('/inventory'))result={sites:[{token:'site1',name:'one.example',path:'/home/one/htdocs/one.example',databases:['one_db'],domains:['one.example','www.one.example'],sources:['vhost NGINX'],configured_id:null},{token:'site2',name:'two.example',path:'/home/two/htdocs/two.example',databases:[],domains:[],sources:['dossiers'],configured_id:'existing'}],mysql:{ok:true,databases:['one_db'],message:'Accès vérifié'},warnings:[]};
@@ -50,5 +51,8 @@ const flush=()=>new Promise(resolve=>setImmediate(resolve));
  assert.equal(requests[0].headers['X-BackupCenter-Language'],language);
  assert.equal(w.document.documentElement.lang,language);
  assert.equal(w.document.querySelector('#server-modal-title').textContent,language==='en'?'Add a VPS':'Ajouter un VPS');
+ w.document.querySelector('#server-dialog').close();
+ w.document.querySelector('[data-maintenance]').click();await flush();assert(w.document.querySelector('#maintenance-dialog').open);assert(w.document.querySelector('#maintenance-upgrade').disabled);
+ const mf=w.document.querySelector('#maintenance-form');mf.elements.password.value='fixture password';mf.dispatchEvent(new w.SubmitEvent('submit',{bubbles:true,cancelable:true,submitter:mf.querySelector('[value=check]')}));await flush();assert.equal(mf.elements.password.value,'');assert(requests.some(r=>r.url.endsWith('/maintenance')&&r.data?.mode==='check'));
  dom.window.close();console.log('Parcours DOM réussi : détection, sélection, import, édition VPS et sauvegarde globale.');
 })().catch(e=>{console.error(e);dom.window.close();process.exitCode=1;});

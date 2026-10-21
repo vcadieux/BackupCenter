@@ -9,7 +9,7 @@ import engine as E
 class CenterTests(unittest.TestCase):
     def setUp(self):
         with E.db() as c:
-            for table in ['jobs','sites','discoveries','servers','settings','attempts','audit']: c.execute('DELETE FROM '+table)
+            for table in ['maintenance','jobs','sites','discoveries','servers','settings','attempts','audit']: c.execute('DELETE FROM '+table)
         (E.DATA/'setup-code.txt').write_text('private-install-code')
         self.client=app.app.test_client();app.app.testing=True
         self.state=self.client.get('/api/state',headers={'Host':'localhost'}).json
@@ -87,6 +87,73 @@ class CenterTests(unittest.TestCase):
      with patch.object(TimestampSigner,'get_timestamp',return_value=issued+31*86400):
       with self.assertRaises(SignatureExpired):serializer.loads(token,max_age=30*86400)
      self.post('logout',{});self.assertFalse(self.client.get('/api/state').json['authenticated'])
+
+    def maintenance_server(self):
+        server=self.server()
+        with E.db() as c:c.execute("UPDATE servers SET username='root',host_keys='fixture pinned' WHERE id=?",(server,))
+        return server
+
+    def test_maintenance_auth_confirmation_and_backup_exclusion(self):
+        import maintenance as M
+        self.setup_admin();server=self.maintenance_server();self.site(server)
+        data=dict(mode='check',version=1,password='bad')
+        self.assertEqual(self.post('servers/'+server+'/maintenance',data).status_code,403)
+        data['password']='a sufficiently long password'
+        self.assertEqual(self.post('servers/'+server+'/maintenance',dict(data,version=9)).status_code,409)
+        response=self.post('servers/'+server+'/maintenance',data);self.assertEqual(response.status_code,200,response.json)
+        with E.db() as c:site=c.execute('SELECT * FROM sites').fetchone()
+        with self.assertRaises(ValueError):E.enqueue(site['id'])
+        self.assertEqual(self.post('servers/'+server+'/maintenance',data).status_code,400)
+        with patch.object(E.SSH,'__exit__',return_value=False),patch.object(E.SSH,'__enter__',return_value=unittest.mock.Mock(call=lambda *a,**k:dict(status='success',packages=['openssl'],digest='a'*64,reboot=False))):M.tick()
+        preview=response.json['id']
+        upgrade=dict(data,mode='upgrade',preview=preview,confirm='wrong')
+        self.assertEqual(self.post('servers/'+server+'/maintenance',upgrade).status_code,400)
+        upgrade['confirm']='Fixture'
+        response=self.post('servers/'+server+'/maintenance',upgrade);self.assertEqual(response.status_code,200,response.json)
+        self.assertEqual(self.post('servers/'+server+'/maintenance',upgrade).status_code,400)
+        history=self.client.get('/api/servers/'+server+'/maintenance').json
+        self.assertNotIn('password',json.dumps(history))
+        self.assertNotIn('private_key',json.dumps(history))
+
+    def test_maintenance_unknown_outcome_polls_without_relaunch(self):
+        import maintenance as M
+        self.setup_admin();server=self.maintenance_server()
+        row=app.getrow('servers',server);id=M.create(row,'check')
+        with patch.object(E.SSH,'__enter__',side_effect=OSError('fixture secret')):self.assertTrue(M.tick())
+        with E.db() as c:self.assertEqual(c.execute('SELECT status FROM maintenance WHERE id=?',(id,)).fetchone()[0],'unknown')
+        remote=unittest.mock.Mock();remote.call.return_value=dict(status='success',packages=[],digest='b'*64)
+        with patch.object(E.SSH,'__exit__',return_value=False),patch.object(E.SSH,'__enter__',return_value=remote):M.tick()
+        self.assertEqual(remote.call.call_args.args[0]['action'],'maintenance_status')
+        with E.db() as c:self.assertFalse(M.busy(c))
+
+    def test_maintenance_stale_preview_and_backup_blocks(self):
+        import maintenance as M
+        self.setup_admin();server=self.maintenance_server();row=app.getrow('servers',server)
+        id=M.create(row,'check')
+        with E.db() as c:c.execute("UPDATE maintenance SET status='success',finished=?,result=? WHERE id=?",(E.now()-901,json.dumps(dict(packages=['x'],digest='a'*64)),id))
+        with self.assertRaises(ValueError):M.create(row,'upgrade',id)
+        site=self.site(server).json['id'];E.enqueue(site)
+        with self.assertRaises(ValueError):M.create(row,'check')
+
+    def test_maintenance_fixed_remote_program_no_real_apt(self):
+        import maintenance_remote as R
+        root=Path(work.name)/('apt-fixture-'+secrets.token_hex(3));root.mkdir()
+        program=R.PROGRAM.replace("'/var/lib/backupcenter-maintenance/operation.lock'",repr(str(root/'lock')))
+        calls=[]
+        def fake(args,**kwargs):
+            calls.append(args)
+            return subprocess.CompletedProcess(args,0,stdout='Inst openssl [1] (2 distro)\n' if '-s' in args else '')
+        import sys
+        with patch.object(sys,'argv',['fixture',str(root),'check','']),patch.object(subprocess,'run',side_effect=fake):exec(program,{'__name__':'fixture'})
+        result=json.loads((root/'result.json').read_text());self.assertEqual(result['packages'],['openssl']);self.assertEqual(result['status'],'success')
+        self.assertIn('update',calls[0]);self.assertNotIn('-y',calls[0])
+        calls.clear()
+        with patch.object(sys,'argv',['fixture',str(root),'upgrade','wrong']),patch.object(subprocess,'run',side_effect=fake):exec(program,{'__name__':'fixture'})
+        self.assertEqual(json.loads((root/'result.json').read_text())['reason'],'changed');self.assertFalse(any('-y' in x for x in calls))
+        calls.clear()
+        with patch.object(sys,'argv',['fixture',str(root),'upgrade',result['digest']]),patch.object(subprocess,'run',side_effect=fake):exec(program,{'__name__':'fixture'})
+        self.assertTrue(any('--no-remove' in x and '-y' in x for x in calls))
+        self.assertFalse(any('reboot' in x for x in calls))
 
     def test_auth_csrf_setup_and_secret_redaction(self):
         self.assertEqual(self.client.post('/api/setup',json={}).status_code,403)

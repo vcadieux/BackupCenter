@@ -102,3 +102,7 @@ Backup time defaults to **02:00** in the configured `TZ` time zone and can be ch
 If BackupCenter helps you, you can support its development via PayPal.
 
 [☕ Buy me a coffee](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=vcadieux%40vincentcadieux.com&item_name=BackupCenter&currency_code=CAD)
+
+## Server updates
+
+On a server card, choose **Updates**. A fresh password and TOTP (if enabled) are required for each check or installation. Checks run `apt-get update` and simulate `apt-get upgrade`; review the package plan, then type the server name to install within 15 minutes. Requires a pinned root SSH connection, Debian/Ubuntu and systemd. Services may restart and sites may be interrupted. Local configuration files are kept; no automatic reboot, package removal, autoremove or distribution upgrade is performed. Held-back packages remain pending. BackupCenter serializes maintenance with its backups across all servers. External APT jobs and backups are outside this coordination. Jobs survive SSH disconnects via transient systemd services; an unknown outcome pauses backups until status is recovered. Sanitized package names and phases are shown; raw command logs and an interactive terminal are not exposed. Keep a recent backup. Remote operation metadata remains under `/var/lib/backupcenter-maintenance` for diagnosis. This manages OS packages, not CloudPanel version upgrades.

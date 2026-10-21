@@ -102,3 +102,7 @@ L’heure par défaut est **02:00**, dans le fuseau `TZ` configuré. Elle se rè
 Si BackupCenter vous est utile, vous pouvez soutenir son développement via PayPal.
 
 [☕ Buy me a coffee](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=vcadieux%40vincentcadieux.com&item_name=BackupCenter&currency_code=CAD)
+
+## Mises à jour du serveur
+
+Dans la fiche du serveur, choisir **Mises à jour**. Chaque vérification ou installation exige le mot de passe et le TOTP si activé. La vérification exécute `apt-get update` puis simule `apt-get upgrade`; consulter les paquets, puis recopier le nom du serveur pour installer dans les 15 minutes. Accès SSH root avec empreinte confirmée, Debian/Ubuntu et systemd requis. Les services peuvent redémarrer et les sites être interrompus. Les configurations locales sont conservées; aucun redémarrage automatique du VPS, suppression de paquet, autoremove ou changement de distribution. Les paquets retenus restent en attente. La maintenance et les sauvegardes BackupCenter sont sérialisées pour tous les serveurs; les tâches APT et sauvegardes externes échappent à ce verrouillage. Les opérations distantes continuent via systemd si SSH coupe; un résultat inconnu suspend les sauvegardes jusqu’à récupération du statut. Seuls les phases et noms de paquets sont affichés; aucun journal brut ni terminal interactif. Conserver une sauvegarde récente. Les métadonnées distantes restent dans `/var/lib/backupcenter-maintenance` pour diagnostic. Ceci gère les paquets système, pas les versions de CloudPanel.

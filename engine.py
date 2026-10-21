@@ -95,6 +95,8 @@ def enqueue(site_id,kind='backup',details=None):
         c.execute('BEGIN IMMEDIATE')
         if c.execute("SELECT 1 FROM jobs WHERE site_id=? AND status IN ('queued','running')",(site_id,)).fetchone():
             raise ValueError('Une tâche est déjà en attente ou en cours pour cet élément.')
+        import maintenance as M
+        if M.busy(c): raise ValueError('Une maintenance serveur est en cours. Réessayez après sa fin.')
         id=secrets.token_hex(12)
         c.execute('INSERT INTO jobs(id,site_id,kind,status,created,details) VALUES(?,?,?,?,?,?)',(id,site_id,kind,'queued',now(),json.dumps(details or {})))
     return id
@@ -110,7 +112,7 @@ class SSH:
         return self
     def __exit__(self,*a): self.tmp.cleanup()
     def call(self,config,out=None,timeout=120):
-        script='CONFIG='+repr(config)+'\n'+REMOTE
+        script='CONFIG='+repr(config)+'\n'+(Path(__file__).with_name('maintenance_remote.py').read_text() if config.get('action','').startswith('maintenance_') else REMOTE)
         result=subprocess.run(self.args+['python3 -'],input=script.encode(),stdout=out or subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=timeout)
         if result.returncode: raise ValueError('Échec SSH : vérifiez la clé, l’empreinte, les permissions, Python 3, tar et les accès MySQL sur le VPS.')
         return json.loads(result.stdout) if out is None else None
@@ -220,7 +222,12 @@ def worker():
         c.execute("UPDATE jobs SET status='failed',finished=?,message='Service redémarré pendant la tâche. Aucun succès présumé; vérifier les éventuels fichiers partiels.' WHERE status='running'",(now(),))
     while True:
         try:
+            import maintenance as M
+            if M.tick():
+                time.sleep(3); continue
             with db() as c:
+                c.execute('BEGIN IMMEDIATE')
+                if M.busy(c): continue
                 due=c.execute('SELECT * FROM sites WHERE enabled=1 AND next_run<=?',(now(),)).fetchall()
                 for site in due:
                     busy=c.execute("SELECT 1 FROM jobs WHERE site_id=? AND status IN ('queued','running')",(site['id'],)).fetchone()

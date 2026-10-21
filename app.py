@@ -7,6 +7,8 @@ import engine as E
 from i18n import translate
 
 E.init()
+import maintenance as M
+M.init()
 app=Flask(__name__,static_folder='public',static_url_path='/static')
 app.secret_key=(E.DATA/'session.key').read_text()
 app.config.update(SESSION_COOKIE_NAME='backupcenter',SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SECURE=os.environ.get('BC_SECURE_COOKIE','1')=='1',SESSION_COOKIE_SAMESITE='Strict',PERMANENT_SESSION_LIFETIME=timedelta(days=30),SESSION_REFRESH_EACH_REQUEST=True,MAX_CONTENT_LENGTH=128*1024)
@@ -46,6 +48,9 @@ def protect():
         origin=request.headers.get('Origin')
         if origin and origin!=('https://'+os.environ.get('BC_HOST','backup.example.com')) and not (app.testing or os.environ.get('BC_SECURE_COOKIE')=='0'):
             return fail('Origine refusée.',403)
+    if request.method=='POST' and request.path.endswith('/trust'):
+        with E.db() as c:
+            if M.busy(c): return fail('Une maintenance serveur est en cours. Réessayez après sa fin.',409)
     if session.get('auth') and session.get('auth_generation','0')!=E.setting('auth_generation','0'):
         session.clear(); session['csrf']=secrets.token_hex(32)
     if request.path.startswith('/api/') and request.path not in ['/api/state','/api/login','/api/setup']:
@@ -269,6 +274,8 @@ def update_server(id):
         old=getrow('servers',id); values=server_values(d,old)
         changed=(values[1],values[2])!=(old['host'],old['port'])
         with E.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            if M.busy(c): return fail('Une maintenance serveur est en cours. Réessayez après sa fin.',409)
             r=c.execute('UPDATE servers SET name=?,host=?,port=?,username=?,private_key=?,db_config=?,host_keys=?,fingerprints=?,version=version+1 WHERE id=? AND version=?',values+('' if changed else old['host_keys'],'' if changed else old['fingerprints'],id,int(d.get('version',0))))
             if not r.rowcount: return fail('Serveur modifié ailleurs. Actualisez.',409)
             c.execute('DELETE FROM discoveries WHERE server_id=?',(id,))
@@ -446,6 +453,25 @@ def download(id):
             finally: tmp.cleanup()
         return Response(stream(),mimetype='application/zip',headers={'Content-Disposition':'attachment; filename="BackupCenter-'+id+'.zip"'})
     except ValueError as e: return fail(str(e))
+
+
+@app.get('/api/servers/<id>/maintenance')
+def maintenance_history(id):
+    getrow('servers',id)
+    with E.db() as c: rows=[dict(r) for r in c.execute('SELECT * FROM maintenance WHERE server_id=? ORDER BY created DESC,rowid DESC LIMIT 20',(id,))]
+    for r in rows:r['result']=json.loads(r['result'])
+    return jsonify(items=rows)
+
+@app.post('/api/servers/<id>/maintenance')
+def maintenance_create(id):
+    server=getrow('servers',id);d=body()
+    if not reauth(d):return fail('Authentification incorrecte.',403)
+    try:
+        mode=d.get('mode')
+        if int(d.get('version',0))!=server['version']:return fail('Serveur modifié ailleurs. Actualisez.',409)
+        if mode=='upgrade' and d.get('confirm')!=server['name']:return fail('Recopiez le nom exact du serveur pour confirmer.',400)
+        return jsonify(id=M.create(server,mode,d.get('preview')))
+    except (ValueError,TypeError) as e:return fail(str(e),400)
 
 if __name__=='__main__':
     threading.Thread(target=E.worker,daemon=True).start()

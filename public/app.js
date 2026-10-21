@@ -129,7 +129,7 @@ function render() {
   $('#archive-filter').value = archiveSite;
   $('#recent-jobs').innerHTML = jobTable(state.jobs.slice(0, 5));
   $('#jobs').innerHTML = jobTable(state.jobs);
-  $('#servers').innerHTML = state.servers.length ? state.servers.map(s => html`<article class="site-card server-card"><div class="card-top"><span class="card-icon">▰</span><span class="badge ${s.fingerprints ? '' : 'neutral'}">${s.fingerprints ? t('Empreinte enregistrée') : t('À vérifier')}</span></div><h3>${esc(s.name)}</h3><p class="subtle">${esc(s.username)}@${esc(s.host)}:${s.port}</p><div class="server-discovery"><button class="primary" data-inventory="${s.id}">Détecter et choisir les sites →</button></div><div class="server-buttons"><button class="secondary" data-server-edit="${s.id}">Configurer</button><button class="secondary" data-scan="${s.id}">Empreinte</button><button class="secondary" data-test="${s.id}">Tester SSH</button><button class="secondary" data-global="${s.id}">VPS global</button></div></article>`).join('') : m('<div class="empty">Aucun serveur connecté.</div>');
+  $('#servers').innerHTML = state.servers.length ? state.servers.map(s => html`<article class="site-card server-card"><div class="card-top"><span class="card-icon">▰</span><span class="badge ${s.fingerprints ? '' : 'neutral'}">${s.fingerprints ? t('Empreinte enregistrée') : t('À vérifier')}</span></div><h3>${esc(s.name)}</h3><p class="subtle">${esc(s.username)}@${esc(s.host)}:${s.port}</p><div class="server-discovery"><button class="primary" data-inventory="${s.id}">Détecter et choisir les sites →</button></div><div class="server-buttons"><button class="secondary" data-server-edit="${s.id}">Configurer</button><button class="secondary" data-scan="${s.id}">Empreinte</button><button class="secondary" data-test="${s.id}">Tester SSH</button><button class="secondary" data-global="${s.id}">VPS global</button><button class="secondary server-maintenance" data-maintenance="${s.id}">Mises à jour</button></div></article>`).join('') : m('<div class="empty">Aucun serveur connecté.</div>');
   $('#totp-status').textContent = state.totp ? t('Activée. Un code est requis à chaque connexion.') : t('Ajoutez un code temporaire à votre mot de passe pour protéger vos archives.');
   $('#audit').innerHTML = state.audit.map(a => html`<div class="audit-item">${esc(a.event)}<small>${esc(dates(a.created))}</small></div>`).join('') || m('<p>Aucun événement.</p>');
   $('#last-refresh').textContent = t('Actualisé à ') + new Date().toLocaleTimeString(BackupCenterI18n.locale);
@@ -586,3 +586,41 @@ action(refresh);
 setInterval(() => {
   if (state.authenticated && !$$('dialog[open]').length) action(refresh);
 }, 12000);
+
+let maintenanceServer=null, maintenancePreview=null, maintenanceBusy=false;
+async function loadMaintenance() {
+  const server=maintenanceServer;if(!server)return;
+  const r=await api('servers/'+server.id+'/maintenance');
+  if(maintenanceServer!==server || !$('#maintenance-dialog').open)return;
+  const active=r.items.find(x=>['queued','running','unknown'].includes(x.status));
+  const latest=r.items[0];
+  maintenanceBusy=!!active;
+  maintenancePreview=!active && r.items.find(x=>x.mode==='check' && x.status==='success' && x.server_version===server.version && x.finished>Date.now()/1000-900 && !r.items.some(u=>u.preview===x.id));
+  const labels={queued:t('En attente'),running:t('En cours'),unknown:t('Connexion interrompue : vérification distante en attente. Les sauvegardes restent suspendues.'),success:t('Terminée'),failed:t('Échec. Vérifiez le serveur avant de réessayer.')};
+  const phases={starting:t('Démarrage'),refresh:t('Actualisation des index APT'),plan:t('Vérification des paquets'),upgrade:t('Installation des paquets')};
+  const reasons={unsupported:t('Root, Debian/Ubuntu et systemd sont requis.'),changed:t('La configuration ou les paquets ont changé. Vérifiez à nouveau.'),refresh:t('Actualisation APT échouée. Vérifiez les dépôts et les verrous sur le VPS.'),launch:t('Démarrage distant impossible.'),upgrade:t('APT a échoué. Une installation partielle est possible; vérifiez le VPS.'),interrupted:t('Opération distante interrompue. Vérifiez le VPS.'),technical:t('Erreur distante. Vérifiez le VPS.')};
+  $('#maintenance-status').textContent=latest ? (latest.mode==='check'?t('Vérification'):t('Installation'))+' · '+labels[latest.status]+(latest.result.phase?' · '+(phases[latest.result.phase]||''):'')+(latest.result.reason && reasons[latest.result.reason]?' · '+reasons[latest.result.reason]:'')+(latest.result.reboot?' · '+t('Redémarrage du VPS requis (à effectuer manuellement).'):'') : t('Aucune vérification effectuée.');
+  const packages=(maintenancePreview||latest)?.result.packages||[];
+  $('#maintenance-packages').innerHTML=packages.length ? html`<details open><summary>${packages.length} ${t('paquet(s) dans le plan de mise à jour')}</summary><pre>${esc(packages.join('\n'))}</pre></details>` : '';
+  $('#maintenance-upgrade').disabled=maintenanceBusy || !maintenancePreview || !packages.length;
+  $('#maintenance-form [value="check"]').disabled=maintenanceBusy;
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-maintenance]');if(!b)return;
+  maintenanceServer=state.servers.find(s=>s.id===b.dataset.maintenance);maintenancePreview=null;
+  $('#maintenance-form').reset();$('#maintenance-title').textContent=t('Mises à jour du système')+' · '+maintenanceServer.name;
+  $('#maintenance-status').textContent=t('Chargement…');$('#maintenance-packages').innerHTML='';$('#maintenance-upgrade').disabled=true;
+  $('#maintenance-dialog').showModal();action(loadMaintenance);
+});
+$('#maintenance-form').addEventListener('submit',e=>{
+  e.preventDefault();const mode=e.submitter.value;
+  action(async()=>{
+    if(maintenanceBusy)throw Error(t('Une opération est déjà en cours. Réessayez après sa fin.'));
+    if(mode==='upgrade' && (!maintenancePreview || e.target.elements.confirm.value!==maintenanceServer.name))throw Error(t('Recopiez le nom exact du serveur pour confirmer.'));
+    const data=formData(e.target);data.mode=mode;data.version=maintenanceServer.version;data.preview=maintenancePreview?.id;
+    $('#maintenance-upgrade').disabled=true;$('#maintenance-form [value="check"]').disabled=true;
+    try {await api('servers/'+maintenanceServer.id+'/maintenance',data);}finally{e.target.elements.password.value='';e.target.elements.totp.value='';await loadMaintenance();}
+  });
+});
+setInterval(()=>{if($('#maintenance-dialog').open)action(loadMaintenance);},3000);
+$('#maintenance-dialog').addEventListener('close',()=>{$('#maintenance-form').reset();maintenanceServer=null;maintenancePreview=null;});
