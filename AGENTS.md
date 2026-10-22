@@ -10,3 +10,5 @@
 - Restoration is isolated and must not overwrite production or import SQL into live databases without an explicit, separately reviewed workflow.
 - Run relevant isolated tests; distinguish compilation, DOM testing, browser verification, and real restoration tests. A verified archive is not proof of a complete recovery.
 - Communicate in the user's language. Do not create or publish GitHub repositories without the user's request.
+
+- Interactive terminals use manual VPS password authentication only; never persist input or transcripts, expose a generic local shell, weaken sshd policy, or bypass host pinning. Preserve browser ownership, inactivity/absolute limits and terminal/backup/maintenance exclusion.

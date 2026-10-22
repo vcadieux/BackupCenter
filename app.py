@@ -9,6 +9,8 @@ from i18n import translate
 E.init()
 import maintenance as M
 M.init()
+import terminals as T
+T.init()
 app=Flask(__name__,static_folder='public',static_url_path='/static')
 app.secret_key=(E.DATA/'session.key').read_text()
 app.config.update(SESSION_COOKIE_NAME='backupcenter',SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SECURE=os.environ.get('BC_SECURE_COOKIE','1')=='1',SESSION_COOKIE_SAMESITE='Strict',PERMANENT_SESSION_LIFETIME=timedelta(days=30),SESSION_REFRESH_EACH_REQUEST=True,MAX_CONTENT_LENGTH=128*1024)
@@ -174,7 +176,8 @@ def login():
     E.audit('Connexion administrateur'); return jsonify(ok=True)
 
 @app.post('/api/logout')
-def logout(): session.clear(); return jsonify(ok=True)
+def logout():
+    T.close_owner(session.get('terminal_owner'));session.clear();return jsonify(ok=True)
 
 def reauth(d):
     if limited(): return False
@@ -474,7 +477,42 @@ def maintenance_create(id):
         return jsonify(id=M.create(server,mode,d.get('preview')))
     except (ValueError,TypeError) as e:return fail(str(e),400)
 
+@app.post('/api/servers/<id>/terminal')
+def terminal_open(id):
+    server=getrow('servers',id);d=body()
+    try:
+        if int(d.get('version',0))!=server['version']:return fail('Serveur modifié ailleurs. Actualisez.',409)
+        if 'terminal_owner' not in session:session['terminal_owner']=secrets.token_hex(24)
+        obj=T.create(server,session['terminal_owner'],session.get('auth_generation','0'),d.get('cols',100),d.get('rows',28))
+        return jsonify(id=obj.id,idle_seconds=T.IDLE,lifetime_seconds=T.LIFETIME)
+    except (ValueError,TypeError):return fail('Terminal indisponible : vérifiez l’empreinte SSH et terminez les opérations en cours.',409)
+
+def owned_terminal(id):
+    try:return T.get(id,session.get('terminal_owner'),session.get('auth_generation','0'))
+    except LookupError:abort(404)
+
+@app.get('/api/terminals/<id>')
+def terminal_read(id):
+    try:return jsonify(owned_terminal(id).read(request.args.get('offset',0)))
+    except (ValueError,TypeError):return fail('Position de terminal invalide.',400)
+
+@app.post('/api/terminals/<id>/input')
+def terminal_input(id):
+    obj=owned_terminal(id);d=body()
+    try:
+        if 'cols' in d or 'rows' in d:obj.resize(d.get('cols',obj.cols),d.get('rows',obj.rows))
+        if 'data' in d:
+            if not isinstance(d['data'],str):raise ValueError()
+            obj.input(d['data'])
+        return jsonify(ok=True)
+    except (ValueError,TypeError,OSError):return fail('Terminal fermé ou saisie invalide.',409)
+
+@app.post('/api/terminals/<id>/close')
+def terminal_close(id):
+    owned_terminal(id).close();return jsonify(ok=True)
+
 if __name__=='__main__':
+    T.start()
     threading.Thread(target=E.worker,daemon=True).start()
     from waitress import serve
     socket_path=os.environ.get('BC_SOCKET')

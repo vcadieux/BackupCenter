@@ -35,3 +35,9 @@ Les commandes ci-dessus exécutent les tests sur des données temporaires, sans 
 Les messages source français servent d’identifiants; leurs traductions anglaises sont dans `messages.json`. Régénérez `public/messages.js` avec `python scripts/build-messages.py`. Gardez les noms de sites, bases, chemins et commandes hors des fragments traduits.
 
 Conservez les résultats de production, captures, adresses réelles et notes d’exploitation dans `.private/`, jamais dans le dépôt public. Aucun test ne doit afficher de clé privée, cookie, secret TOTP ou mot de passe.
+
+## Terminal
+
+Terminal tests cover browser ownership, CSRF, backup/maintenance locks, idle and absolute expiry, authentication revocation, bounded output and password-only pinned SSH options. An additional private isolated SSH fixture validated password login, live shell output, Ctrl+C, PTY resizing and absence of password echo. No production SSH password is used by tests. Live VPS password authentication is a user-performed validation.
+
+Les tests du terminal vérifient les limites, l’isolation et les verrous. Une fixture SSH isolée valide le mot de passe, le shell, Ctrl+C et les dimensions du PTY; aucun mot de passe réel ni commande de production.

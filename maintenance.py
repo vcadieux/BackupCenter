@@ -5,7 +5,9 @@ ACTIVE="('queued','running','unknown')"
 def init():
  with E.db() as c:
   c.execute("CREATE TABLE IF NOT EXISTS maintenance(id TEXT PRIMARY KEY,server_id TEXT NOT NULL REFERENCES servers(id),server_version INTEGER NOT NULL,mode TEXT NOT NULL,status TEXT NOT NULL,created INTEGER NOT NULL,finished INTEGER,preview TEXT NOT NULL DEFAULT '',result TEXT NOT NULL DEFAULT '{}')")
-def busy(c):return c.execute('SELECT 1 FROM maintenance WHERE status IN '+ACTIVE).fetchone()
+def busy(c):
+ import terminals as T
+ return c.execute('SELECT 1 FROM maintenance WHERE status IN '+ACTIVE).fetchone() or T.active(c)
 def create(server,mode,preview=None):
  if mode not in ['check','upgrade']:raise ValueError('Opération invalide.')
  if server['username']!='root' or not server['host_keys']:raise ValueError('Cette opération exige root et une empreinte SSH confirmée.')

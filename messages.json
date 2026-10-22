@@ -382,5 +382,18 @@
   "Une maintenance serveur est en cours. Réessayez après sa fin.": "Server maintenance is active. Try again when it finishes.",
   "Écrivez Oui pour confirmer l’installation": "Type Yes to confirm installation",
   "Écrivez Oui pour confirmer l’installation.": "Type Yes to confirm installation.",
-  "Oui": "Yes"
+  "Oui": "Yes",
+  "CONSOLE DISTANTE": "REMOTE CONSOLE",
+  "Terminal SSH": "SSH terminal",
+  "Terminal SSH interactif": "Interactive SSH terminal",
+  "Connectez-vous avec l’utilisateur et le mot de passe du VPS. Rien n’est enregistré. Root permet de modifier tout le serveur. Les sauvegardes et la maintenance BackupCenter sont suspendues pendant cette session.": "Log in with the VPS username and password. Nothing is recorded. Root can change the entire server. BackupCenter backups and maintenance are paused during this session.",
+  "Fermeture après 5 minutes sans saisie ou 30 minutes maximum.": "Closes after 5 minutes without input or 30 minutes maximum.",
+  "Déconnecter": "Disconnect",
+  "Connexion manuelle : utilisateur puis mot de passe du VPS.": "Manual login: VPS username, then password.",
+  "Connexion au terminal interrompue. Fermez puis rouvrez le terminal.": "Terminal connection interrupted. Close and reopen the terminal.",
+  "Une partie de la sortie a été écartée (limite mémoire).": "Some output was discarded (memory limit).",
+  "Terminal fermé. Les tâches détachées sur le serveur peuvent continuer.": "Terminal closed. Detached tasks on the server may continue.",
+  "Terminal indisponible : vérifiez l’empreinte SSH et terminez les opérations en cours.": "Terminal unavailable: check the SSH fingerprint and finish current operations.",
+  "Position de terminal invalide.": "Invalid terminal offset.",
+  "Terminal fermé ou saisie invalide.": "Terminal closed or invalid input."
 }

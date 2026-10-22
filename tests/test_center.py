@@ -8,8 +8,11 @@ import engine as E
 
 class CenterTests(unittest.TestCase):
     def setUp(self):
+        import terminals as T
+        for obj in list(T.sessions.values()):obj.close('test-cleanup')
+        T.sessions.clear()
         with E.db() as c:
-            for table in ['maintenance','jobs','sites','discoveries','servers','settings','attempts','audit']: c.execute('DELETE FROM '+table)
+            for table in ['terminal_sessions','maintenance','jobs','sites','discoveries','servers','settings','attempts','audit']: c.execute('DELETE FROM '+table)
         (E.DATA/'setup-code.txt').write_text('private-install-code')
         self.client=app.app.test_client();app.app.testing=True
         self.state=self.client.get('/api/state',headers={'Host':'localhost'}).json
@@ -166,6 +169,49 @@ class CenterTests(unittest.TestCase):
         with patch.object(sys,'argv',['fixture',str(root),'upgrade',result['digest']]),patch.object(subprocess,'run',side_effect=fake):exec(program,{'__name__':'fixture'})
         self.assertTrue(any('--no-remove' in x and '-y' in x for x in calls))
         self.assertFalse(any('reboot' in x for x in calls))
+
+    def test_terminal_session_ownership_csrf_locks_and_logout(self):
+        import terminals as T
+        self.setup_admin();server=self.maintenance_server();site=self.site(server).json['id']
+        self.assertEqual(self.client.post('/api/servers/'+server+'/terminal',json={}).status_code,403)
+        response=self.post('servers/'+server+'/terminal',dict(version=1));self.assertEqual(response.status_code,200,response.json);id=response.json['id']
+        self.assertEqual(self.client.get('/api/terminals/'+id).status_code,200)
+        with self.assertRaises(ValueError):E.enqueue(site)
+        import maintenance as M
+        with self.assertRaises(ValueError):M.create(app.getrow('servers',server),'check')
+        with self.assertRaises(LookupError):T.get(id,'another-browser','0')
+        self.assertEqual(self.post('terminals/'+id+'/input',dict(cols=9999,rows=20)).status_code,409)
+        self.post('logout',{})
+        self.assertTrue(T.sessions[id].closed)
+        self.assertEqual(self.client.get('/api/terminals/'+id).status_code,401)
+        with E.db() as c:self.assertFalse(M.busy(c))
+
+    def test_terminal_expiry_buffer_and_auth_revocation(self):
+        import terminals as T
+        self.setup_admin();server=self.maintenance_server();row=app.getrow('servers',server)
+        obj=T.create(row,'owner','0',100,25)
+        obj.append(b'x'*(T.LIMIT+30));result=obj.read(0)
+        self.assertTrue(result['dropped']);self.assertLessEqual(len(obj.output),T.LIMIT)
+        with self.assertRaises(ValueError):obj.read(-1)
+        obj.touched-=T.IDLE+1;self.assertTrue(T.get(obj.id,'owner','0').closed)
+        obj=T.create(row,'owner','0',100,25);obj.created-=T.LIFETIME+1
+        self.assertTrue(T.get(obj.id,'owner','0').closed)
+        obj=T.create(row,'owner','0',100,25);E.setsetting('auth_generation','new')
+        with self.assertRaises(LookupError):T.get(obj.id,'owner','0')
+        self.assertTrue(obj.closed)
+
+    def test_terminal_password_only_options_and_login_validation(self):
+        import terminals as T
+        self.setup_admin();server=self.maintenance_server();obj=T.create(app.getrow('servers',server),'owner','0',100,25)
+        obj.input('bad-user;bad\r');self.assertIsNone(obj.proc)
+        with patch.object(obj,'spawn') as spawn:obj.input('root\r');spawn.assert_called_once_with('root')
+        fake=unittest.mock.Mock();fake.pid=999999;fake.poll.return_value=0
+        with patch.object(T.subprocess,'Popen',return_value=fake) as popen,patch.object(T.threading.Thread,'start'):
+            obj.spawn('root')
+        args=json.loads(popen.call_args.args[0][-1])
+        self.assertIn('PubkeyAuthentication=no',args);self.assertIn('PreferredAuthentications=password',args);self.assertIn('StrictHostKeyChecking=yes',args)
+        self.assertIn('ClearAllForwardings=yes',args);self.assertIn('PermitLocalCommand=no',args);self.assertNotIn('-i',args)
+        obj.close();self.assertFalse(Path(popen.call_args.kwargs['env'].get('SSH_AUTH_SOCK','/missing-fixture-path')).exists())
 
     def test_auth_csrf_setup_and_secret_redaction(self):
         self.assertEqual(self.client.post('/api/setup',json={}).status_code,403)
