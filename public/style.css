@@ -45,3 +45,5 @@ dialog label{font-size:13px}dialog textarea{padding:13px;border-radius:9px}dialo
 #terminal-dialog .terminal-footer{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
 #terminal-dialog .terminal-footer button{flex-shrink:0;min-height:42px}
 @media(max-height:540px){#terminal-dialog[open]{padding:14px}#terminal-dialog>p{max-height:42px;font-size:11px}#terminal-dialog .notice{padding:7px 10px;font-size:11px}#terminal-title{font-size:18px}#terminal-dialog .eyebrow{margin-bottom:2px}.terminal-footer small{font-size:10px}}
+
+.brand .brand-icon{display:block;width:32px;height:32px;flex:0 0 32px;object-fit:contain}
