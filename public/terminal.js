@@ -1,7 +1,7 @@
 'use strict';
 (()=>{
  const $=s=>document.querySelector(s),t=BackupCenterI18n.t;
- let terminal=null,fit=null,id=null,offset=0,pollTimer=null,inputTimer=null,inputBuffer='',inputChain=Promise.resolve(),opening=false,epoch=0,observer=null;
+ let terminal=null,fit=null,id=null,offset=0,pollTimer=null,inputTimer=null,inputBuffer='',inputChain=Promise.resolve(),opening=false,epoch=0,observer=null,lastInput=0;
  const request=async(path,data)=>{
   const options={credentials:'same-origin',headers:{'X-BackupCenter-Language':BackupCenterI18n.language}};
   if(data!==undefined){options.method='POST';options.headers['Content-Type']='application/json';options.headers['X-CSRF-Token']=state.csrf;options.body=JSON.stringify(data);}
@@ -22,7 +22,7 @@
    if(result.dropped)terminal.writeln(t('Une partie de la sortie a été écartée (limite mémoire).'));
    const bytes=Uint8Array.from(atob(result.data),x=>x.charCodeAt(0));if(bytes.length)terminal.write(bytes);offset=result.offset;
    if(result.closed){stop();$('#terminal-status').textContent=t('Terminal fermé. Les tâches détachées sur le serveur peuvent continuer.');return;}
-   pollTimer=setTimeout(()=>poll(currentEpoch),250);
+   pollTimer=setTimeout(()=>poll(currentEpoch),performance.now()-lastInput<2000?40:250);
   }catch(error){if(currentEpoch===epoch){stop();if(error.status===401){await close();$('#terminal-dialog').close();await refresh();}toast(error.message,true);}}
  }
  async function close(){
@@ -44,7 +44,7 @@
     const result=await request('servers/'+server.id+'/terminal',{version:server.version,cols:terminal.cols,rows:terminal.rows});
     if(currentEpoch!==epoch){await request('terminals/'+result.id+'/close',{});return;}
     id=result.id;offset=0;inputChain=Promise.resolve();
-    terminal.onData(data=>{inputBuffer+=data;if(inputBuffer.length>=2048)flush();else{clearTimeout(inputTimer);inputTimer=setTimeout(flush,30);}});
+    terminal.onData(data=>{lastInput=performance.now();inputBuffer+=data;if(inputBuffer.length>=2048)flush();else{clearTimeout(inputTimer);inputTimer=setTimeout(flush,8);}});
     terminal.onResize(size=>{if(id)send(size);});
     observer=new ResizeObserver(()=>{if(terminal && $('#terminal-dialog').open)fit.fit();});observer.observe($('#terminal-screen'));
     terminal.focus();poll(currentEpoch);

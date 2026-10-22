@@ -27,7 +27,7 @@ class Session:
   self.tmp=tempfile.TemporaryDirectory(dir=E.DATA/'ssh');known=Path(self.tmp.name)/'known_hosts';known.write_text(self.server['host_keys']);known.chmod(0o600)
   args=['ssh','-F','/dev/null','-tt','-p',str(self.server['port']),'-l',username,
    '-o','BatchMode=no','-o','PubkeyAuthentication=no','-o','PreferredAuthentications=password','-o','PasswordAuthentication=yes','-o','KbdInteractiveAuthentication=no',
-   '-o','GSSAPIAuthentication=no','-o','HostbasedAuthentication=no','-o','IdentityAgent=none','-o','ForwardAgent=no','-o','ForwardX11=no',
+   '-o','HostbasedAuthentication=no','-o','IdentityAgent=none','-o','ForwardAgent=no','-o','ForwardX11=no',
    '-o','ClearAllForwardings=yes','-o','PermitLocalCommand=no','-o','EscapeChar=none','-o','ControlMaster=no','-o','ControlPath=none',
    '-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+str(known),'-o','ConnectTimeout=15','-o','ServerAliveInterval=15','-o','ServerAliveCountMax=2','-o','NumberOfPasswordPrompts=3',self.server['host']]
   master,slave=os.openpty();fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack('HHHH',self.rows,self.cols,0,0))
