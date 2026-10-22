@@ -213,6 +213,15 @@ class CenterTests(unittest.TestCase):
         self.assertIn('ClearAllForwardings=yes',args);self.assertIn('PermitLocalCommand=no',args);self.assertNotIn('-i',args)
         obj.close();self.assertFalse(Path(popen.call_args.kwargs['env'].get('SSH_AUTH_SOCK','/missing-fixture-path')).exists())
 
+    def test_terminal_styles_have_per_response_nonce(self):
+        import re
+        first=self.client.get('/');second=self.client.get('/')
+        nonce=lambda response:re.search(r'<meta name="bc-style-nonce" content="([^"]+)">',response.get_data(as_text=True)).group(1)
+        a=nonce(first);b=nonce(second);self.assertNotEqual(a,b)
+        self.assertIn("'nonce-"+a+"'",first.headers['Content-Security-Policy'])
+        self.assertNotIn("'unsafe-inline'",first.headers['Content-Security-Policy'])
+        first.close();second.close()
+
     def test_auth_csrf_setup_and_secret_redaction(self):
         self.assertEqual(self.client.post('/api/setup',json={}).status_code,403)
         self.assertEqual(self.post('servers',{}).status_code,401)

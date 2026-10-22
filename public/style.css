@@ -34,3 +34,14 @@ dialog label{font-size:13px}dialog textarea{padding:13px;border-radius:9px}dialo
 .maintenance-status-bar{display:flex;align-items:center;justify-content:space-between;gap:16px}.maintenance-status-bar #maintenance-status{min-width:0;overflow-wrap:anywhere}#maintenance-check{flex-shrink:0}@media(max-width:540px){.maintenance-status-bar{flex-wrap:wrap}.maintenance-status-bar #maintenance-check{margin-left:auto}}
 
 .server-terminal{grid-column:1/-1}#terminal-dialog{width:1100px}#terminal-screen{height:420px;min-height:220px;max-height:55vh;background:#101e2c;padding:12px;margin-top:16px;border-radius:9px;overflow:hidden}#terminal-screen .xterm{height:100%}.terminal-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:16px}#terminal-dialog .notice{font-size:12px}@media(max-width:760px){#terminal-screen{height:350px;padding:8px}.terminal-footer{align-items:flex-start}#terminal-dialog{padding:18px}}
+
+.server-maintenance,.server-terminal{grid-column:auto}
+#terminal-dialog[open]{display:flex;flex-direction:column;height:min(740px,calc(100vh - 32px));height:min(740px,calc(100dvh - 32px));max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow:hidden;padding:22px}
+#terminal-dialog>.modal-head,#terminal-dialog>.notice,#terminal-dialog>.terminal-footer{flex-shrink:0}
+#terminal-dialog>p{font-size:12px;margin:10px 0;max-height:72px;overflow:auto;flex-shrink:0}
+#terminal-dialog>.notice{margin-top:0;padding:10px 12px;max-height:64px;overflow:auto}
+#terminal-screen{flex:1 1 0;min-height:80px;height:auto;max-height:none;margin-top:12px;padding:10px;color:#e8f0e8;font-family:monospace}
+#terminal-screen .xterm-rows{color:#e8f0e8}
+#terminal-dialog .terminal-footer{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+#terminal-dialog .terminal-footer button{flex-shrink:0;min-height:42px}
+@media(max-height:540px){#terminal-dialog[open]{padding:14px}#terminal-dialog>p{max-height:42px;font-size:11px}#terminal-dialog .notice{padding:7px 10px;font-size:11px}#terminal-title{font-size:18px}#terminal-dialog .eyebrow{margin-bottom:2px}.terminal-footer small{font-size:10px}}

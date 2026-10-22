@@ -1,7 +1,7 @@
 import os, re, json, secrets, hmac, time, base64, hashlib, struct, tempfile, shutil, threading
 from pathlib import Path
 from datetime import timedelta
-from flask import Flask, request, session, jsonify, send_from_directory, send_file, Response, abort
+from flask import Flask, g, request, session, jsonify, send_from_directory, send_file, Response, abort
 from werkzeug.security import generate_password_hash, check_password_hash
 import engine as E
 from i18n import translate
@@ -42,6 +42,7 @@ def attempt(success):
 
 @app.before_request
 def protect():
+    g.style_nonce=secrets.token_urlsafe(24)
     if request.host.split(':')[0] not in [os.environ.get('BC_HOST','backup.example.com'),'localhost','127.0.0.1']:
         return fail('Hôte refusé.',400)
     if 'csrf' not in session: session['csrf']=secrets.token_hex(32)
@@ -64,7 +65,7 @@ def headers(r):
     r.headers['X-Content-Type-Options']='nosniff'
     r.headers['X-Frame-Options']='DENY'
     r.headers['Referrer-Policy']='no-referrer'
-    r.headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    r.headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self' 'nonce-"+g.style_nonce+"'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
     return r
 
 @app.errorhandler(400)
@@ -91,7 +92,9 @@ def getrow(table,id):
     return row
 
 @app.get('/')
-def index(): return send_from_directory('public','index.html')
+def index():
+    html=Path(app.static_folder,'index.html').read_text()
+    return Response(html.replace('<head>','<head><meta name="bc-style-nonce" content="'+g.style_nonce+'">',1),mimetype='text/html')
 
 @app.get('/api/state')
 def state():
